@@ -12,11 +12,12 @@ export default function Buat({ initialCategory }) {
         title: "",
         description: "",
         scheduled_for: "",
+        error_notif: ""
     });
 
     const submit = (e) => {
         e.preventDefault();
-        post("/u/permintaan");
+        post("/u/permintaan/simpan");
     };
 
     const CATEGORIES = [
@@ -43,6 +44,13 @@ export default function Buat({ initialCategory }) {
                         ← Kembali
                     </Link>
                 </div>
+
+                {/* Error Alert */}
+                {errors.error_notif && (
+                    <div className="p-4 mb-4 mt-5 text-sm w-[93%] mx-auto text-red-800 font-bold bg-red-100 rounded-lg" role="alert">
+                        {errors.error_notif}
+                    </div>
+                )}
 
                 {/* Form */}
                 <form

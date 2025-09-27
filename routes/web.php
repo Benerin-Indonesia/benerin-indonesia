@@ -11,7 +11,8 @@ use App\Http\Controllers\Auth\TechnicianAuthController;
 use App\Http\Controllers\Auth\AdminAuthController;
 use App\Http\Controllers\Admin\Auth\AdminPasswordResetLinkController;
 use App\Http\Controllers\Admin\Auth\AdminNewPasswordController;
-use App\Http\Controllers\User\UserController;
+
+use App\Http\Controllers\ServiceRequest\ServiceRequestController;
 
 Route::get('/', [LandingPageController::class, 'index'])->name('home');
 
@@ -42,7 +43,8 @@ Route::prefix('user')->name('user.')->group(function () {
 });
 
 // Request Form Permintaan service oleh user
-Route::get('/u/permintaan/buat', [UserController::class, 'buatPermintaan'])->name('permintaan.create')->middleware('auth');
+Route::get('/u/permintaan/buat', [ServiceRequestController::class, 'buatPermintaan'])->name('permintaan.create')->middleware('auth');
+Route::post('/u/permintaan/simpan', [ServiceRequestController::class, 'store'])->name('permintaan.store')->middleware('auth');
 
 /* ===== Teknisi ===== */
 Route::prefix('teknisi')->name('teknisi.')->group(function () {
