@@ -13,6 +13,8 @@ use App\Http\Controllers\Admin\Auth\AdminPasswordResetLinkController;
 use App\Http\Controllers\Admin\Auth\AdminNewPasswordController;
 
 use App\Http\Controllers\ServiceRequest\ServiceRequestController;
+use App\Http\Controllers\Teknisi\TechnicianController;
+use App\Http\Controllers\User\userController;
 
 Route::get('/', [LandingPageController::class, 'index'])->name('home');
 
@@ -33,18 +35,21 @@ Route::prefix('user')->name('user.')->group(function () {
 
     // sudah login (role = user)
     Route::middleware('auth')->group(function () {
-        Route::get('/dashboard', function () {
-            if (!Auth::user() || Auth::user()->role !== 'user') {
-                abort(403);
-            }
-            return Inertia::render('user/dashboard');
-        })->name('dashboard');
+        // Route::get('/dashboard', function () {
+        //     if (!Auth::user() || Auth::user()->role !== 'user') {
+        //         abort(403);
+        //     }
+        //     return Inertia::render('user/dashboard');
+        // })->name('dashboard');
     });
-});
 
-// Request Form Permintaan service oleh user
-Route::get('/u/permintaan/buat', [ServiceRequestController::class, 'buatPermintaan'])->name('permintaan.create')->middleware('auth');
-Route::post('/u/permintaan/simpan', [ServiceRequestController::class, 'store'])->name('permintaan.store')->middleware('auth');
+    // Dashboard user
+    Route::get('/dashboard', [userController::class, 'index'])->name('dashboard');
+
+    // Request Form Permintaan service oleh user
+    Route::get('/permintaan/buat', [ServiceRequestController::class, 'buatPermintaan'])->name('permintaan.create');
+    Route::post('/permintaan/simpan', [ServiceRequestController::class, 'store'])->name('permintaan.store');
+});
 
 /* ===== Teknisi ===== */
 Route::prefix('teknisi')->name('teknisi.')->group(function () {
@@ -59,12 +64,15 @@ Route::prefix('teknisi')->name('teknisi.')->group(function () {
 
     // sudah login (role = teknisi)
     Route::middleware('auth')->group(function () {
-        Route::get('/dashboard', function () {
-            if (!Auth::user() || Auth::user()->role !== 'teknisi') {
-                abort(403);
-            }
-            return Inertia::render('teknisi/dashboard');
-        })->name('dashboard');
+        // Route::get('/dashboard', function () {
+        //     if (!Auth::user() || Auth::user()->role !== 'teknisi') {
+        //         abort(403);
+        //     }
+        //     return Inertia::render('teknisi/dashboard');
+        // })->name('dashboard');
+
+        // Dashboard teknisi
+        Route::get('/dashboard', [TechnicianController::class, 'index'])->name('dashboard');
     });
 });
 

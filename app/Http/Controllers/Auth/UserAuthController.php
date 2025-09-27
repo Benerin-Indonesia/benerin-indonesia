@@ -36,7 +36,7 @@ class UserAuthController extends Controller
         }
 
         $request->session()->regenerate();
-        return redirect()->intended('/u/dashboard'); // ubah sesuai rute dashboard user
+        return redirect()->intended('/user/dashboard'); // ubah sesuai rute dashboard user
     }
 
     public function showRegisterForm()

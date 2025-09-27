@@ -51,7 +51,7 @@ export default function TechnicianDashboard() {
   const [available, setAvailable] = useState(true);
 
   // Dummy fallback agar tidak blank
-  const statsData = stats ?? { today: 2, in_progress: 1, revenue_today: 150000 };
+  const statsData = stats ?? { today: 0, in_progress: 0, revenue_today: 0 };
   const incomingData: JobItem[] =
     incoming ?? [
       {
