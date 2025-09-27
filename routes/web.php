@@ -11,6 +11,7 @@ use App\Http\Controllers\Auth\TechnicianAuthController;
 use App\Http\Controllers\Auth\AdminAuthController;
 use App\Http\Controllers\Admin\Auth\AdminPasswordResetLinkController;
 use App\Http\Controllers\Admin\Auth\AdminNewPasswordController;
+use App\Http\Controllers\User\UserController;
 
 Route::get('/', [LandingPageController::class, 'index'])->name('home');
 
@@ -26,7 +27,7 @@ Route::prefix('user')->name('user.')->group(function () {
         Route::post('/login',   [UserAuthController::class, 'login'])->name('login');
 
         Route::get('/register', [UserAuthController::class, 'showRegisterForm'])->name('register.show');
-        Route::post('/register',[UserAuthController::class, 'register'])->name('register');
+        Route::post('/register', [UserAuthController::class, 'register'])->name('register');
     });
 
     // sudah login (role = user)
@@ -40,6 +41,9 @@ Route::prefix('user')->name('user.')->group(function () {
     });
 });
 
+// Request Form Permintaan service oleh user
+Route::get('/u/permintaan/buat', [UserController::class, 'buatPermintaan'])->name('permintaan.create')->middleware('auth');
+
 /* ===== Teknisi ===== */
 Route::prefix('teknisi')->name('teknisi.')->group(function () {
     // tamu
@@ -48,7 +52,7 @@ Route::prefix('teknisi')->name('teknisi.')->group(function () {
         Route::post('/login',   [TechnicianAuthController::class, 'login'])->name('login');
 
         Route::get('/register', [TechnicianAuthController::class, 'showRegisterForm'])->name('register.show');
-        Route::post('/register',[TechnicianAuthController::class, 'register'])->name('register');
+        Route::post('/register', [TechnicianAuthController::class, 'register'])->name('register');
     });
 
     // sudah login (role = teknisi)
@@ -68,7 +72,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::post('/login', [AdminAuthController::class, 'login'])->name('login');
 
     // forgot password (halaman yang ada)
-    Route::get('/forgot-password', fn () => Inertia::render('admin/forgot-password'))
+    Route::get('/forgot-password', fn() => Inertia::render('admin/forgot-password'))
         ->name('password.request');
     Route::post('/forgot-password', [AdminPasswordResetLinkController::class, 'store'])
         ->name('password.email');
