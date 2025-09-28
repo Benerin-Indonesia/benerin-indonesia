@@ -12,9 +12,9 @@ class IndonesianTechnicianServiceSeeder extends Seeder
 {
     public function run()
     {
-        Schema::disableForeignKeyConstraints();
-        TechnicianService::truncate();
-        Schema::enableForeignKeyConstraints();
+        // Schema::disableForeignKeyConstraints();
+        // TechnicianService::truncate();
+        // Schema::enableForeignKeyConstraints();
 
         $faker = Faker::create('id_ID');
 
@@ -51,4 +51,28 @@ class IndonesianTechnicianServiceSeeder extends Seeder
 
         $this->command->info('✅ Seeding layanan teknisi selesai.');
     }
+    // {
+    //     // Buat akun user teknisi 1
+    //     $technician = User::firstOrCreate(
+    //         ['email' => 'teknisi@gmail.com'], // cek email unik
+    //         [
+    //             'name' => 'Teknisi 1',
+    //             'password' => '11111111', // ubah sesuai kebutuhan
+    //             'role' => 'teknisi',
+    //         ]
+    //     );
+
+    //     // Tambahkan layanan default (misalnya kategori AC)
+    //     TechnicianService::firstOrCreate(
+    //         [
+    //             'technician_id' => $technician->id,
+    //             'category' => 'ac',
+    //         ],
+    //         [
+    //             'active' => true,
+    //         ]
+    //     );
+
+    //     $this->command->info('✅ Akun teknisi1 berhasil dibuat dengan email: teknisi1@example.com dan password: password123');
+    // }
 }

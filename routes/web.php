@@ -34,12 +34,13 @@ Route::prefix('user')->name('user.')->group(function () {
 
     // sudah login (role = user)
     Route::middleware('auth')->group(function () {
-        Route::get('/dashboard', function () {
-            if (!Auth::user() || Auth::user()->role !== 'user') {
-                abort(403);
-            }
-            return Inertia::render('user/dashboard');
-        })->name('dashboard');
+        // Route::get('/dashboard', function () {
+        //     if (!Auth::user() || Auth::user()->role !== 'user') {
+        //         abort(403);
+        //     }
+        //     return Inertia::render('user/dashboard');
+        // })->name('dashboard');
+        Route::get('/dashboard', [App\Http\Controllers\User\UserController::class, 'index'])->name('dashboard');
     });
 });
 

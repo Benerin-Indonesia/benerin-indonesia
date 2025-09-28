@@ -19,7 +19,7 @@ class IndonesianUserSeeder extends Seeder
     {
         // Membersihkan tabel user untuk menghindari data duplikat saat seeding ulang
         Schema::disableForeignKeyConstraints();
-        User::truncate();
+        // User::truncate();
         Schema::enableForeignKeyConstraints();
 
         $faker = Faker::create('id_ID');

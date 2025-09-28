@@ -4,15 +4,28 @@ import { Head, Link, usePage } from "@inertiajs/react";
 const PRIMARY = "#206BB0";
 
 type AuthUser = { id: number; name: string; email: string; role: string };
+// type JobItem = {
+//   id: number;
+//   title: string;
+//   category: string;
+//   distance_km?: number | null;
+//   scheduled_for?: string | null;
+//   status: "baru" | "ditawar" | "dijadwalkan" | "dikerjakan" | "selesai";
+//   price_offer?: number | null;
+// };
+
 type JobItem = {
   id: number;
   title: string;
   category: string;
-  distance_km?: number | null;
+  description: string;
   scheduled_for?: string | null;
   status: "baru" | "ditawar" | "dijadwalkan" | "dikerjakan" | "selesai";
   price_offer?: number | null;
+
+  distance_km?: number | null; // Belum dipakai
 };
+
 type PageProps = {
   auth?: { user: AuthUser | null };
   stats?: { today: number; in_progress: number; revenue_today: number };
@@ -31,11 +44,31 @@ function money(n?: number | null) {
 
 function statusPill(s: JobItem["status"]) {
   const map: Record<JobItem["status"], { text: string; cls: string }> = {
-    baru:        { text: "Baru",        cls: "bg-blue-50 text-blue-700 border-blue-200" },
-    ditawar:     { text: "Ditawar",     cls: "bg-amber-50 text-amber-700 border-amber-200" },
-    dijadwalkan: { text: "Dijadwalkan", cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-    dikerjakan:  { text: "Dikerjakan",  cls: "bg-purple-50 text-purple-700 border-purple-200" },
-    selesai:     { text: "Selesai",     cls: "bg-green-50 text-green-700 border-green-200" },
+    // baru: { text: "Baru", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+    // ditawar: { text: "Ditawar", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    // dijadwalkan: { text: "Dijadwalkan", cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+    // dikerjakan: { text: "Dikerjakan", cls: "bg-purple-50 text-purple-700 border-purple-200" },
+    // selesai: { text: "Selesai", cls: "bg-green-50 text-green-700 border-green-200" },
+    menunggu: {
+      text: "Menunggu",
+      cls: "bg-blue-50 text-blue-700 border-blue-200",
+    },
+    diproses: {
+      text: "Diproses",
+      cls: "bg-amber-50 text-amber-700 border-amber-200",
+    },
+    dijadwalkan: {
+      text: "Dijadwalkan",
+      cls: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    },
+    selesai: {
+      text: "Selesai",
+      cls: "bg-green-50 text-green-700 border-green-200",
+    },
+    dibatalkan: {
+      text: "Dibatalkan",
+      cls: "bg-red-50 text-red-700 border-red-200",
+    },
   };
   const m = map[s];
   return (
@@ -52,35 +85,36 @@ export default function TechnicianDashboard() {
 
   // Dummy fallback agar tidak blank
   const statsData = stats ?? { today: 0, in_progress: 0, revenue_today: 0 };
-  const incomingData: JobItem[] =
-    incoming ?? [
-      {
-        id: 301,
-        title: "Servis AC Panasonic 1 PK",
-        category: "ac",
-        distance_km: 3.4,
-        scheduled_for: null,
-        status: "baru",
-      },
-      {
-        id: 302,
-        title: "Kulkas tidak dingin",
-        category: "kulkas",
-        distance_km: 5.2,
-        scheduled_for: "2025-10-02 10:00",
-        status: "dijadwalkan",
-        price_offer: 250000,
-      },
-      {
-        id: 303,
-        title: "TV LED garis vertikal",
-        category: "tv",
-        distance_km: 2.1,
-        scheduled_for: null,
-        status: "ditawar",
-        price_offer: 180000,
-      },
-    ];
+  const incomingData: JobItem[] = incoming ?? [];
+  // const incomingData: JobItem[] =
+  //   incoming ?? [
+  //     {
+  //       id: 301,
+  //       title: "Servis AC Panasonic 1 PK",
+  //       category: "ac",
+  //       distance_km: 3.4,
+  //       scheduled_for: null,
+  //       status: "baru",
+  //     },
+  //     {
+  //       id: 302,
+  //       title: "Kulkas tidak dingin",
+  //       category: "kulkas",
+  //       distance_km: 5.2,
+  //       scheduled_for: "2025-10-02 10:00",
+  //       status: "dijadwalkan",
+  //       price_offer: 250000,
+  //     },
+  //     {
+  //       id: 303,
+  //       title: "TV LED garis vertikal",
+  //       category: "tv",
+  //       distance_km: 2.1,
+  //       scheduled_for: null,
+  //       status: "ditawar",
+  //       price_offer: 180000,
+  //     },
+  //   ];
 
   // Reveal aman: default terlihat; hanya disembunyikan saat JS aktif (progressive enhancement)
   useEffect(() => {
@@ -113,28 +147,28 @@ export default function TechnicianDashboard() {
     verification === "verified"
       ? "border-green-200 bg-green-50 text-green-700"
       : verification === "pending"
-      ? "border-amber-200 bg-amber-50 text-amber-700"
-      : verification === "rejected"
-      ? "border-red-200 bg-red-50 text-red-700"
-      : "";
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : verification === "rejected"
+          ? "border-red-200 bg-red-50 text-red-700"
+          : "";
 
   const verificationIcon =
     verification === "verified"
       ? "fas fa-badge-check text-green-600"
       : verification === "pending"
-      ? "fas fa-hourglass-half text-amber-600"
-      : verification === "rejected"
-      ? "fas fa-exclamation-triangle text-red-600"
-      : "";
+        ? "fas fa-hourglass-half text-amber-600"
+        : verification === "rejected"
+          ? "fas fa-exclamation-triangle text-red-600"
+          : "";
 
   const verificationText =
     verification === "verified"
       ? "Akun terverifikasi"
       : verification === "pending"
-      ? "Verifikasi diproses"
-      : verification === "rejected"
-      ? "Verifikasi ditolak – unggah ulang dokumen"
-      : "";
+        ? "Verifikasi diproses"
+        : verification === "rejected"
+          ? "Verifikasi ditolak – unggah ulang dokumen"
+          : "";
 
   return (
     <>

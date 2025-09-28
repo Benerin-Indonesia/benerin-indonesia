@@ -32,9 +32,29 @@ class TechnicianController extends Controller
             'revenue_today' => 0, // Placeholder before implementation
         ];
 
+        $job_items = ServiceRequest::where('technician_id', $technician_id)
+            ->whereIn('status', ['menunggu', 'diproses', 'dijadwalkan', 'selesai', 'dibatalkan']) // filter sesuai kebutuhan
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($req) {
+                return [
+                    'id' => $req->id,
+                    'title' => $req->title ?? 'Pekerjaan Tanpa Judul', // fallback kalau tidak ada
+                    'category' => $req->category ?? '-',
+                    'description' => $req->description ?? '',
+                    // 'scheduled_for' => $req->scheduled_for ? $req->scheduled_for->toDateTimeString() : null,
+                    'scheduled_for' => $req->scheduled_for
+                        ? \Carbon\Carbon::parse($req->scheduled_for)->toDateTimeString()
+                        : null,
+                    'status' => $req->status, // pastikan value sesuai union type di TS
+                    'price_offer' => $req->price_offer ?? null,
+                ];
+            });
+
         return Inertia::render('teknisi/dashboard', [
             'available' => $available,
             'stats' => $tasks, // React kamu expect `stats`, bukan `tasks`
+            'incoming' => $job_items,
         ]);
     }
 }

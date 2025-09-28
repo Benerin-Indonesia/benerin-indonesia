@@ -51,7 +51,7 @@ class ServiceRequestController extends Controller
         // Simpan request
         ServiceRequest::create([
             'user_id'       => $request->user()->id,
-            'technician_id' => 37,
+            'technician_id' => 36,
             // 'technician_id' => $technician->technician_id, // FK ke users
             'title'         => $validated['title'],
             'category'      => $slugCategory,
