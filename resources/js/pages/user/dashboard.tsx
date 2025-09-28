@@ -23,15 +23,16 @@ type PageProps = {
   auth?: { user: AuthUser | null };
   stats?: { active: number; scheduled: number; completed: number };
   recent?: RequestItem[];
+  categories: Category[];
 };
 
 // Kategori (slug konsisten dgn backend)
-const CATEGORIES: { slug: string; name: string; icon: string; hint: string }[] = [
-  { slug: "ac", name: "AC", icon: "fas fa-snowflake", hint: "Bersih, isi freon, servis" },
-  { slug: "tv", name: "TV", icon: "fas fa-tv", hint: "Gambar/suara bermasalah" },
-  { slug: "kulkas", name: "Kulkas", icon: "fas fa-icicles", hint: "Tidak dingin, bocor" },
-  { slug: "mesin-cuci", name: "Mesin Cuci", icon: "fas fa-soap", hint: "Bunyi, tidak berputar" },
-];
+// const CATEGORIES: { slug: string; name: string; icon: string; hint: string }[] = [
+//   { slug: "ac", name: "AC", icon: "fas fa-snowflake", hint: "Bersih, isi freon, servis" },
+//   { slug: "tv", name: "TV", icon: "fas fa-tv", hint: "Gambar/suara bermasalah" },
+//   { slug: "kulkas", name: "Kulkas", icon: "fas fa-icicles", hint: "Tidak dingin, bocor" },
+//   { slug: "mesin-cuci", name: "Mesin Cuci", icon: "fas fa-soap", hint: "Bunyi, tidak berputar" },
+// ];
 
 function statusBadge(s: RequestItem["status"]) {
   const map: Record<RequestItem["status"], { text: string; cls: string }> = {
@@ -70,16 +71,18 @@ function statusBadge(s: RequestItem["status"]) {
 }
 
 export default function UserDashboard() {
-  const { auth, stats, recent } = usePage<PageProps>().props || {};
+  const { auth, stats, recent, categories } = usePage<PageProps>().props || {};
   const name = auth?.user?.name ?? "Pengguna";
 
   // Dummy agar tidak blank ketika BE belum kirim data
   const statsData = stats ?? { active: 0, scheduled: 0, completed: 0 };
-  const recentData: RequestItem[] = recent ?? [
-    { id: 101, title: "Servis AC Daikin 1/2 PK", category: "ac", scheduled_for: "2025-10-01 14:00", status: "dijadwalkan" },
-    { id: 102, title: "TV LED Samsung tidak nyala", category: "tv", scheduled_for: null, status: "menunggu" },
-    { id: 103, title: "Kulkas dua pintu kurang dingin", category: "kulkas", scheduled_for: "2025-10-03 09:00", status: "diproses" },
-  ];
+  const recentData: RequestItem[] = recent ?? [];
+  const categoriesData: Category[] = categories ?? [];
+  // const recentData: RequestItem[] = recent ?? [
+  //   { id: 101, title: "Servis AC Daikin 1/2 PK", category: "ac", scheduled_for: "2025-10-01 14:00", status: "dijadwalkan" },
+  //   { id: 102, title: "TV LED Samsung tidak nyala", category: "tv", scheduled_for: null, status: "menunggu" },
+  //   { id: 103, title: "Kulkas dua pintu kurang dingin", category: "kulkas", scheduled_for: "2025-10-03 09:00", status: "diproses" },
+  // ];
 
   // Reveal aman: konten TETAP terlihat jika JS gagal.
   useEffect(() => {
@@ -171,7 +174,7 @@ export default function UserDashboard() {
               </Link>
             </div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {CATEGORIES.map((c) => (
+              {categoriesData.map((c) => (
                 <div
                   key={c.slug}
                   className="group rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"

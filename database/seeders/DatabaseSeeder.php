@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             IndonesianUserSeeder::class,
             IndonesianTechnicianServiceSeeder::class,
+            CategorySeeder::class,
         ]);
     }
 }

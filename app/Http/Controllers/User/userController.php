@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\ServiceRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,6 +17,10 @@ class userController extends Controller
         if (!$user || $user->role !== 'user') abort(403);
 
         $user_id = $user->id;
+
+        // $categories = Category::select('id', 'slug', 'name', 'icon', 'hint')->limit(4)->get();
+        $categories = Category::select('id', 'slug', 'name', 'icon', 'hint')->get(); // NO LIMIT
+        // dd($categories);
 
         $tasks = [
             'active' => ServiceRequest::where('user_id', $user_id)
@@ -51,6 +56,7 @@ class userController extends Controller
         return Inertia::render('user/dashboard', [
             'stats' => $tasks,
             'recent' => $request_items,
+            'categories' => $categories,
         ]);
     }
 }
