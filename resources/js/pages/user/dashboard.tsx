@@ -263,7 +263,7 @@ export default function UserDashboard() {
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <Link
-                        href={`/u/permintaan/${r.id}`}
+                        href={`/user/permintaan/${r.id}`}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                       >
                         <i className="fas fa-eye" /> Detail

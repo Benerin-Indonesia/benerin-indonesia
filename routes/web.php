@@ -12,8 +12,12 @@ use App\Http\Controllers\Auth\AdminAuthController;
 use App\Http\Controllers\Admin\Auth\AdminPasswordResetLinkController;
 use App\Http\Controllers\Admin\Auth\AdminNewPasswordController;
 
-use App\Http\Controllers\ServiceRequest\ServiceRequestController;
+use App\Http\Controllers\ServiceRequest\User\ServiceRequestController as UserServiceRequestController;
+use App\Http\Controllers\ServiceRequest\Teknisi\ServiceRequestController as TechnicianServiceRequestController;
 use App\Http\Controllers\Teknisi\TechnicianController;
+use App\Models\ServiceRequest;
+
+use function Pest\Laravel\get;
 
 Route::get('/', [LandingPageController::class, 'index'])->name('home');
 
@@ -41,12 +45,14 @@ Route::prefix('user')->name('user.')->group(function () {
         //     return Inertia::render('user/dashboard');
         // })->name('dashboard');
         Route::get('/dashboard', [App\Http\Controllers\User\UserController::class, 'index'])->name('dashboard');
+        Route::get('/permintaan/{id}', [UserServiceRequestController::class, 'show'])->name('permintaan.show');
+        Route::post('/permintaan-harga', [UserServiceRequestController::class, 'createPrice'])->name('technician-service.request-price');
     });
 });
 
 // Request Form Permintaan service oleh user
-Route::get('/u/permintaan/buat', [ServiceRequestController::class, 'buatPermintaan'])->name('permintaan.create')->middleware('auth');
-Route::post('/u/permintaan/simpan', [ServiceRequestController::class, 'store'])->name('permintaan.store')->middleware('auth');
+Route::get('/u/permintaan/buat', [UserServiceRequestController::class, 'buatPermintaan'])->name('permintaan.create')->middleware('auth');
+Route::post('/u/permintaan/simpan', [UserServiceRequestController::class, 'store'])->name('permintaan.store')->middleware('auth');
 
 /* ===== Teknisi ===== */
 Route::prefix('teknisi')->name('teknisi.')->group(function () {
@@ -71,6 +77,10 @@ Route::prefix('teknisi')->name('teknisi.')->group(function () {
         Route::get('/dashboard', [TechnicianController::class, 'index'])->name('dashboard');
         Route::post('/toggle-activity', [TechnicianController::class, 'toggleAvailability'])
             ->name('toggle-availability');
+
+        // Teknisi Service Request
+        Route::get('/permintaan/{id}', [TechnicianServiceRequestController::class, 'show'])->name('service.show');
+        Route::post('/permintaan-harga', [TechnicianServiceRequestController::class, 'createPrice'])->name('technician-service.request-price');
     });
 });
 

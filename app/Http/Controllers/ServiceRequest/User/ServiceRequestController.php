@@ -1,8 +1,9 @@
 <?php
 
-namespace App\Http\Controllers\ServiceRequest;
+namespace App\Http\Controllers\ServiceRequest\User;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\ServiceRequest;
 use App\Models\TechnicianService;
 use Illuminate\Http\Request;
@@ -16,8 +17,46 @@ class ServiceRequestController extends Controller
      */
     public function buatPermintaan(Request $request)
     {
+        // $categories = Category::select('id', 'slug', 'name', 'icon', 'hint')->limit(4)->get();
+        $categories = Category::select('id', 'name', 'slug')->get(); // NO LIMIT
+        // dd($categories);
+
         return Inertia::render('user/form/create', [
             'initialCategory' => $request->query('category', ''),
+            'categories' => $categories,
+        ]);
+    }
+
+    public function createPrice(Request $request)
+    {
+        $request->validate([
+            'request_id' => 'required|exists:service_requests,id',
+            'offer_price' => 'required|numeric|min:0',
+        ]);
+
+        $serviceRequest = ServiceRequest::find($request->request_id);
+        if (!$serviceRequest) {
+            return redirect()->back()->withErrors(['error' => 'Service request not found.']);
+        }
+
+        if ($serviceRequest->status == "menunggu") {
+            $serviceRequest->accepted_price = $request->offer_price;
+            $serviceRequest->status = 'menunggu'; // Update status to 'diproses'
+            $serviceRequest->save();
+
+            return redirect()->back()->with('success', 'Price offer submitted successfully.');
+        } else {
+            return redirect()->back()->with('gagal', 'sesi penawaran telah berakir');
+        }
+    }
+
+    public function show(Request $request)
+    {
+        $request = ServiceRequest::findorFail($request->id);
+        // dd($request);
+
+        return Inertia::render('user/request-service/show', [
+            'request' => $request,
         ]);
     }
 
@@ -26,6 +65,7 @@ class ServiceRequestController extends Controller
      */
     public function store(Request $request)
     {
+        // dd($request->all());
         $validated = $request->validate([
             'category'      => 'required|string|max:255',
             'title'         => 'required|string|max:255',

@@ -4,11 +4,11 @@ import { Head, Link, useForm } from "@inertiajs/react";
 const PRIMARY = "#206BB0";
 
 // 1. Terima prop 'initialCategory' di sini
-export default function Buat({ initialCategory }) {
+export default function Buat({ initialCategory, categories }) {
 
     // 2. Gunakan prop untuk nilai awal form
     const { data, setData, post, processing, errors } = useForm({
-        category: initialCategory || "",
+        category: initialCategory,
         title: "",
         description: "",
         scheduled_for: "",
@@ -20,12 +20,12 @@ export default function Buat({ initialCategory }) {
         post("/u/permintaan/simpan");
     };
 
-    const CATEGORIES = [
-        { slug: "ac", name: "AC" },
-        { slug: "tv", name: "TV" },
-        { slug: "kulkas", name: "Kulkas" },
-        { slug: "mesin-cuci", name: "Mesin Cuci" },
-    ];
+    // const CATEGORIES = [
+    //     { slug: "ac", name: "AC" },
+    //     { slug: "tv", name: "TV" },
+    //     { slug: "kulkas", name: "Kulkas" },
+    //     { slug: "mesin-cuci", name: "Mesin Cuci" },
+    // ];
 
     return (
         <>
@@ -68,7 +68,7 @@ export default function Buat({ initialCategory }) {
                             className="mt-2 block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         >
                             <option value="">-- Pilih kategori --</option>
-                            {CATEGORIES.map((c) => (
+                            {categories.map((c) => (
                                 <option key={c.slug} value={c.slug}>
                                     {c.name}
                                 </option>

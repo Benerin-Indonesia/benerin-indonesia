@@ -18,8 +18,8 @@ class userController extends Controller
 
         $user_id = $user->id;
 
-        // $categories = Category::select('id', 'slug', 'name', 'icon', 'hint')->limit(4)->get();
-        $categories = Category::select('id', 'slug', 'name', 'icon', 'hint')->get(); // NO LIMIT
+        $categories = Category::select('id', 'slug', 'name', 'icon', 'hint')->limit(4)->get();
+        // $categories = Category::select('id', 'slug', 'name', 'icon', 'hint')->get(); // NO LIMIT
         // dd($categories);
 
         $tasks = [
