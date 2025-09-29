@@ -5,33 +5,62 @@ const PRIMARY = "#206BB0";
 
 type AuthUser = { id: number; name: string; email: string; role: string };
 type RequestItem = {
+  // id: number;
+  // title: string;
+  // category: string;
+  // scheduled_for?: string | null;
+  // status: "menunggu" | "diproses" | "dijadwalkan" | "selesai" | "dibatalkan";
+
   id: number;
   title: string;
   category: string;
+  description: string;
   scheduled_for?: string | null;
-  status: "menunggu" | "diproses" | "dijadwalkan" | "selesai" | "dibatalkan";
+  status: "baru" | "ditawar" | "dijadwalkan" | "dikerjakan" | "selesai";
+  price_offer?: number | null;
 };
 type PageProps = {
   auth?: { user: AuthUser | null };
   stats?: { active: number; scheduled: number; completed: number };
   recent?: RequestItem[];
+  categories: Category[];
 };
 
 // Kategori (slug konsisten dgn backend)
-const CATEGORIES: { slug: string; name: string; icon: string; hint: string }[] = [
-  { slug: "ac",         name: "AC",         icon: "fas fa-snowflake",  hint: "Bersih, isi freon, servis" },
-  { slug: "tv",         name: "TV",         icon: "fas fa-tv",         hint: "Gambar/suara bermasalah" },
-  { slug: "kulkas",     name: "Kulkas",     icon: "fas fa-icicles",    hint: "Tidak dingin, bocor" },
-  { slug: "mesin-cuci", name: "Mesin Cuci", icon: "fas fa-soap",       hint: "Bunyi, tidak berputar" },
-];
+// const CATEGORIES: { slug: string; name: string; icon: string; hint: string }[] = [
+//   { slug: "ac", name: "AC", icon: "fas fa-snowflake", hint: "Bersih, isi freon, servis" },
+//   { slug: "tv", name: "TV", icon: "fas fa-tv", hint: "Gambar/suara bermasalah" },
+//   { slug: "kulkas", name: "Kulkas", icon: "fas fa-icicles", hint: "Tidak dingin, bocor" },
+//   { slug: "mesin-cuci", name: "Mesin Cuci", icon: "fas fa-soap", hint: "Bunyi, tidak berputar" },
+// ];
 
 function statusBadge(s: RequestItem["status"]) {
   const map: Record<RequestItem["status"], { text: string; cls: string }> = {
-    menunggu:    { text: "Menunggu",    cls: "bg-gray-100 text-gray-700 border-gray-200" },
-    diproses:    { text: "Diproses",    cls: "bg-blue-50 text-blue-700 border-blue-200" },
-    dijadwalkan: { text: "Dijadwalkan", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-    selesai:     { text: "Selesai",     cls: "bg-green-50 text-green-700 border-green-200" },
-    dibatalkan:  { text: "Dibatalkan",  cls: "bg-red-50 text-red-700 border-red-200" },
+    // menunggu: { text: "Menunggu", cls: "bg-gray-100 text-gray-700 border-gray-200" },
+    // diproses: { text: "Diproses", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+    // dijadwalkan: { text: "Dijadwalkan", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    // selesai: { text: "Selesai", cls: "bg-green-50 text-green-700 border-green-200" },
+    // dibatalkan: { text: "Dibatalkan", cls: "bg-red-50 text-red-700 border-red-200" },
+    menunggu: {
+      text: "Menunggu",
+      cls: "bg-blue-50 text-blue-700 border-blue-200",
+    },
+    diproses: {
+      text: "Diproses",
+      cls: "bg-amber-50 text-amber-700 border-amber-200",
+    },
+    dijadwalkan: {
+      text: "Dijadwalkan",
+      cls: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    },
+    selesai: {
+      text: "Selesai",
+      cls: "bg-green-50 text-green-700 border-green-200",
+    },
+    dibatalkan: {
+      text: "Dibatalkan",
+      cls: "bg-red-50 text-red-700 border-red-200",
+    },
   };
   const m = map[s];
   return (
@@ -42,16 +71,18 @@ function statusBadge(s: RequestItem["status"]) {
 }
 
 export default function UserDashboard() {
-  const { auth, stats, recent } = usePage<PageProps>().props || {};
+  const { auth, stats, recent, categories } = usePage<PageProps>().props || {};
   const name = auth?.user?.name ?? "Pengguna";
 
   // Dummy agar tidak blank ketika BE belum kirim data
-  const statsData = stats ?? { active: 1, scheduled: 1, completed: 3 };
-  const recentData: RequestItem[] = recent ?? [
-    { id: 101, title: "Servis AC Daikin 1/2 PK", category: "ac",      scheduled_for: "2025-10-01 14:00", status: "dijadwalkan" },
-    { id: 102, title: "TV LED Samsung tidak nyala", category: "tv",   scheduled_for: null,               status: "menunggu" },
-    { id: 103, title: "Kulkas dua pintu kurang dingin", category: "kulkas", scheduled_for: "2025-10-03 09:00", status: "diproses" },
-  ];
+  const statsData = stats ?? { active: 0, scheduled: 0, completed: 0 };
+  const recentData: RequestItem[] = recent ?? [];
+  const categoriesData: Category[] = categories ?? [];
+  // const recentData: RequestItem[] = recent ?? [
+  //   { id: 101, title: "Servis AC Daikin 1/2 PK", category: "ac", scheduled_for: "2025-10-01 14:00", status: "dijadwalkan" },
+  //   { id: 102, title: "TV LED Samsung tidak nyala", category: "tv", scheduled_for: null, status: "menunggu" },
+  //   { id: 103, title: "Kulkas dua pintu kurang dingin", category: "kulkas", scheduled_for: "2025-10-03 09:00", status: "diproses" },
+  // ];
 
   // Reveal aman: konten TETAP terlihat jika JS gagal.
   useEffect(() => {
@@ -143,7 +174,7 @@ export default function UserDashboard() {
               </Link>
             </div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {CATEGORIES.map((c) => (
+              {categoriesData.map((c) => (
                 <div
                   key={c.slug}
                   className="group rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
@@ -172,9 +203,9 @@ export default function UserDashboard() {
         {/* Stats singkat */}
         <div className="reveal mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           {[
-            { label: "Permintaan Aktif", value: statsData.active,    icon: "fa-bolt",           hint: "Sedang jalan" },
-            { label: "Terjadwal",        value: statsData.scheduled, icon: "fa-calendar-check", hint: "Kunjungan teknisi" },
-            { label: "Selesai",          value: statsData.completed, icon: "fa-check-circle",   hint: "Perbaikan tuntas" },
+            { label: "Permintaan Aktif", value: statsData.active, icon: "fa-bolt", hint: "Sedang jalan" },
+            { label: "Terjadwal", value: statsData.scheduled, icon: "fa-calendar-check", hint: "Kunjungan teknisi" },
+            { label: "Selesai", value: statsData.completed, icon: "fa-check-circle", hint: "Perbaikan tuntas" },
           ].map((s) => (
             <div
               key={s.label}
@@ -232,7 +263,7 @@ export default function UserDashboard() {
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <Link
-                        href={`/u/permintaan/${r.id}`}
+                        href={`/user/permintaan/${r.id}`}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                       >
                         <i className="fas fa-eye" /> Detail

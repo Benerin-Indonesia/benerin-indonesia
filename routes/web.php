@@ -12,6 +12,13 @@ use App\Http\Controllers\Auth\AdminAuthController;
 use App\Http\Controllers\Admin\Auth\AdminPasswordResetLinkController;
 use App\Http\Controllers\Admin\Auth\AdminNewPasswordController;
 
+use App\Http\Controllers\ServiceRequest\User\ServiceRequestController as UserServiceRequestController;
+use App\Http\Controllers\ServiceRequest\Teknisi\ServiceRequestController as TechnicianServiceRequestController;
+use App\Http\Controllers\Teknisi\TechnicianController;
+use App\Models\ServiceRequest;
+
+use function Pest\Laravel\get;
+
 Route::get('/', [LandingPageController::class, 'index'])->name('home');
 
 /* ===== Pilihan login/daftar umum ===== */
@@ -26,19 +33,26 @@ Route::prefix('user')->name('user.')->group(function () {
         Route::post('/login',   [UserAuthController::class, 'login'])->name('login');
 
         Route::get('/register', [UserAuthController::class, 'showRegisterForm'])->name('register.show');
-        Route::post('/register',[UserAuthController::class, 'register'])->name('register');
+        Route::post('/register', [UserAuthController::class, 'register'])->name('register');
     });
 
     // sudah login (role = user)
     Route::middleware('auth')->group(function () {
-        Route::get('/dashboard', function () {
-            if (!Auth::user() || Auth::user()->role !== 'user') {
-                abort(403);
-            }
-            return Inertia::render('user/dashboard');
-        })->name('dashboard');
+        // Route::get('/dashboard', function () {
+        //     if (!Auth::user() || Auth::user()->role !== 'user') {
+        //         abort(403);
+        //     }
+        //     return Inertia::render('user/dashboard');
+        // })->name('dashboard');
+        Route::get('/dashboard', [App\Http\Controllers\User\UserController::class, 'index'])->name('dashboard');
+        Route::get('/permintaan/{id}', [UserServiceRequestController::class, 'show'])->name('permintaan.show');
+        Route::post('/permintaan-harga', [UserServiceRequestController::class, 'createPrice'])->name('technician-service.request-price');
     });
 });
+
+// Request Form Permintaan service oleh user
+Route::get('/u/permintaan/buat', [UserServiceRequestController::class, 'buatPermintaan'])->name('permintaan.create')->middleware('auth');
+Route::post('/u/permintaan/simpan', [UserServiceRequestController::class, 'store'])->name('permintaan.store')->middleware('auth');
 
 /* ===== Teknisi ===== */
 Route::prefix('teknisi')->name('teknisi.')->group(function () {
@@ -48,17 +62,25 @@ Route::prefix('teknisi')->name('teknisi.')->group(function () {
         Route::post('/login',   [TechnicianAuthController::class, 'login'])->name('login');
 
         Route::get('/register', [TechnicianAuthController::class, 'showRegisterForm'])->name('register.show');
-        Route::post('/register',[TechnicianAuthController::class, 'register'])->name('register');
+        Route::post('/register', [TechnicianAuthController::class, 'register'])->name('register');
     });
 
     // sudah login (role = teknisi)
     Route::middleware('auth')->group(function () {
-        Route::get('/dashboard', function () {
-            if (!Auth::user() || Auth::user()->role !== 'teknisi') {
-                abort(403);
-            }
-            return Inertia::render('teknisi/dashboard');
-        })->name('dashboard');
+        // Route::get('/dashboard', function () {
+        //     if (!Auth::user() || Auth::user()->role !== 'teknisi') {
+        //         abort(403);
+        //     }
+        //     return Inertia::render('teknisi/dashboard');
+        // })->name('dashboard');
+
+        Route::get('/dashboard', [TechnicianController::class, 'index'])->name('dashboard');
+        Route::post('/toggle-activity', [TechnicianController::class, 'toggleAvailability'])
+            ->name('toggle-availability');
+
+        // Teknisi Service Request
+        Route::get('/permintaan/{id}', [TechnicianServiceRequestController::class, 'show'])->name('service.show');
+        Route::post('/permintaan-harga', [TechnicianServiceRequestController::class, 'createPrice'])->name('technician-service.request-price');
     });
 });
 
@@ -68,7 +90,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::post('/login', [AdminAuthController::class, 'login'])->name('login');
 
     // forgot password (halaman yang ada)
-    Route::get('/forgot-password', fn () => Inertia::render('admin/forgot-password'))
+    Route::get('/forgot-password', fn() => Inertia::render('admin/forgot-password'))
         ->name('password.request');
     Route::post('/forgot-password', [AdminPasswordResetLinkController::class, 'store'])
         ->name('password.email');
