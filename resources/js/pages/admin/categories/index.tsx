@@ -1,67 +1,45 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Head, Link, useForm, usePage, router } from "@inertiajs/react";
+import { Head, Link, router, useForm, usePage } from "@inertiajs/react";
 
 /* =========================================
-   Types & helpers
+   Types
 ========================================= */
-type Role = "user" | "teknisi" | "admin";
-
-type User = {
+type Category = {
   id: number;
+  slug: string;
   name: string;
-  email: string;
-  role: Role;
-  phone?: string | null;
-  bank_name?: string | null;
-  account_name?: string | null;
-  account_number?: string | null;
+  icon?: string | null;
 };
 
-type PaginatedUsers = { data: User[] };
+type Paginated<T> = { data: T[] };
 
 type PageProps = {
   auth?: { user?: { name?: string } };
-  users?: PaginatedUsers | User[];
-  filters?: { q?: string; role?: string };
+  categories?: Paginated<Category> | Category[];
+  filters?: { q?: string };
 };
 
-const ROLE_LABEL: Record<Role, string> = {
-  user: "User",
-  teknisi: "Teknisi",
-  admin: "Admin",
-};
+/* =========================================
+   Helpers
+========================================= */
+function isPaginatedCategories(
+  c: PageProps["categories"]
+): c is Paginated<Category> {
+  return typeof c === "object" && c !== null && !Array.isArray(c) && Array.isArray((c as Paginated<Category>).data);
+}
 
-function isPaginatedUsers(u: PageProps["users"]): u is PaginatedUsers {
-  return typeof u === "object" && u !== null && !Array.isArray(u) && Array.isArray((u as PaginatedUsers).data);
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
 }
 
 /* =========================================
-   Sidebar Nav (selaras dashboard)
+   Small UI
 ========================================= */
-const NAV = [
-  { href: "/admin/dashboard", icon: "fa-tachometer-alt", label: "Dashboard" },
-  { href: "/admin/requests", icon: "fa-clipboard-list", label: "Permintaan Servis" },
-  { href: "/admin/payments", icon: "fa-receipt", label: "Pembayaran" },
-  { href: "/admin/payouts", icon: "fa-hand-holding-usd", label: "Pencairan Dana" },
-  { href: "/admin/balances", icon: "fa-balance-scale", label: "Saldo" },
-  { href: "/admin/users", icon: "fa-users", label: "Users" },
-  { href: "/admin/technician-services", icon: "fa-tools", label: "Layanan Teknisi" },
-  { href: "/admin/categories", icon: "fa-tags", label: "Kategori" },
-];
-
-/* =========================================
-   Small UI building blocks
-========================================= */
-function RoleBadge({ role }: { role: Role }) {
-  const cls =
-    role === "admin"
-      ? "bg-gray-900 text-white"
-      : role === "teknisi"
-        ? "bg-blue-50 text-blue-700"
-        : "bg-gray-100 text-gray-700";
-  return <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${cls}`}>{ROLE_LABEL[role]}</span>;
-}
-
 function Modal({
   open,
   onClose,
@@ -111,38 +89,28 @@ function Modal({
 }
 
 /* =========================================
-   Create & Edit Forms (modal)
+   Forms
 ========================================= */
-function CreateUserForm({ onDone }: { onDone: () => void }) {
+function CreateCategoryForm({ onDone }: { onDone: () => void }) {
   type CreateForm = {
     name: string;
-    email: string;
-    password: string;
-    role: Role;
-    phone: string;
-    bank_name: string;
-    account_name: string;
-    account_number: string;
+    slug: string;
+    icon: string;
   };
   const form = useForm<CreateForm>({
     name: "",
-    email: "",
-    password: "",
-    role: "user",
-    phone: "",
-    bank_name: "",
-    account_name: "",
-    account_number: "",
+    slug: "",
+    icon: "",
   });
 
   const submit: React.FormEventHandler = (e) => {
     e.preventDefault();
-    form.post("/admin/users", {
+    form.post("/admin/categories", {
       preserveScroll: true,
       onSuccess: () => {
         form.reset();
         onDone();
-        router.reload({ only: ["users"] });
+        router.reload({ only: ["categories"] });
       },
     });
   };
@@ -155,113 +123,56 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
           type="text"
           value={form.data.name}
           onChange={(e) => {
-            form.setData("name", e.target.value);
+            const v = e.target.value;
+            form.setData("name", v);
+            if (!form.data.slug) form.setData("slug", slugify(v));
             if (form.errors.name) form.clearErrors("name");
           }}
           className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.name ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
             }`}
-          placeholder="Nama lengkap"
+          placeholder="AC / TV / Kulkas / Mesin Cuci"
           required
         />
         {form.errors.name && <p className="mt-1 text-xs text-red-600">{form.errors.name}</p>}
       </div>
 
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Email</label>
-        <input
-          type="email"
-          value={form.data.email}
-          onChange={(e) => {
-            form.setData("email", e.target.value);
-            if (form.errors.email) form.clearErrors("email");
-          }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.email ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
-          placeholder="user@example.com"
-          required
-        />
-        {form.errors.email && <p className="mt-1 text-xs text-red-600">{form.errors.email}</p>}
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Password</label>
-        <input
-          type="password"
-          value={form.data.password}
-          onChange={(e) => {
-            form.setData("password", e.target.value);
-            if (form.errors.password) form.clearErrors("password");
-          }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.password ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
-          placeholder="••••••••"
-          required
-        />
-        {form.errors.password && <p className="mt-1 text-xs text-red-600">{form.errors.password}</p>}
-      </div>
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-800">Role</label>
-          <select
-            value={form.data.role}
-            onChange={(e) => form.setData("role", e.target.value as Role)}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
-          >
-            <option value="user">User</option>
-            <option value="teknisi">Teknisi</option>
-            <option value="admin">Admin</option>
-          </select>
+          <label className="mb-1 block text-sm font-medium text-gray-800">Slug</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={form.data.slug}
+              onChange={(e) => form.setData("slug", slugify(e.target.value))}
+              className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.slug ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
+                }`}
+              placeholder="ac / tv / kulkas / mesin-cuci"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => form.setData("slug", slugify(form.data.name))}
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              title="Generate dari nama"
+            >
+              <i className="fas fa-magic" /> Buat
+            </button>
+          </div>
+          {form.errors.slug && <p className="mt-1 text-xs text-red-600">{form.errors.slug}</p>}
         </div>
+
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-800">Phone (opsional)</label>
+          <label className="mb-1 block text-sm font-medium text-gray-800">Icon (opsional)</label>
           <input
-            type="tel"
-            value={form.data.phone}
-            onChange={(e) => form.setData("phone", e.target.value)}
+            type="text"
+            value={form.data.icon}
+            onChange={(e) => form.setData("icon", e.target.value)}
             className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-            placeholder="08xx-xxxx-xxxx"
+            placeholder="emoji (🔧) atau nama file (ac.png)"
           />
+          {form.errors.icon && <p className="mt-1 text-xs text-red-600">{form.errors.icon}</p>}
         </div>
       </div>
-
-      {form.data.role === "teknisi" && (
-        <fieldset className="rounded-xl border border-gray-100 p-4">
-          <legend className="px-2 text-sm font-semibold text-gray-900">Data Rekening (teknisi)</legend>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">Bank</label>
-              <input
-                type="text"
-                value={form.data.bank_name}
-                onChange={(e) => form.setData("bank_name", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="BCA/BNI/BRI/…"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">Nama Pemilik</label>
-              <input
-                type="text"
-                value={form.data.account_name}
-                onChange={(e) => form.setData("account_name", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="Nama di buku tabungan"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">No. Rekening</label>
-              <input
-                type="text"
-                value={form.data.account_number}
-                onChange={(e) => form.setData("account_number", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="1234567890"
-              />
-            </div>
-          </div>
-        </fieldset>
-      )}
 
       <div className="pt-2">
         <button
@@ -284,46 +195,31 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
-  type EditForm = {
-    name: string;
-    email: string;
-    role: Role;
-    phone: string;
-    password: string;
-    bank_name: string;
-    account_name: string;
-    account_number: string;
-  };
+function EditCategoryForm({ category, onDone }: { category: Category; onDone: () => void }) {
+  type EditForm = { name: string; slug: string; icon: string };
   const form = useForm<EditForm>({
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    phone: user?.phone ?? "",
-    password: "",
-    bank_name: user?.bank_name ?? "",
-    account_name: user?.account_name ?? "",
-    account_number: user?.account_number ?? "",
+    name: category.name,
+    slug: category.slug,
+    icon: category.icon ?? "",
   });
 
   const submit: React.FormEventHandler = (e) => {
     e.preventDefault();
-    form.put(`/admin/users/${user.id}`, {
+    form.put(`/admin/categories/${category.id}`, {
       preserveScroll: true,
       onSuccess: () => {
-        form.reset("password");
         onDone();
-        router.reload({ only: ["users"] });
+        router.reload({ only: ["categories"] });
       },
     });
   };
 
   const onDelete = () => {
-    if (!confirm(`Hapus user "${user.name}"?`)) return;
-    form.delete(`/admin/users/${user.id}`, {
+    if (!confirm(`Hapus kategori "${category.name}"?`)) return;
+    form.delete(`/admin/categories/${category.id}`, {
       onSuccess: () => {
         onDone();
-        router.reload({ only: ["users"] });
+        router.reload({ only: ["categories"] });
       },
     });
   };
@@ -331,7 +227,7 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
       <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-500">ID: #{user.id}</span>
+        <span className="text-sm text-gray-500">ID: #{category.id}</span>
         <button
           type="button"
           onClick={onDelete}
@@ -347,112 +243,56 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
           type="text"
           value={form.data.name}
           onChange={(e) => {
-            form.setData("name", e.target.value);
-            if (form.errors.name) form.clearErrors("name");
+            const v = e.target.value;
+            form.setData("name", v);
+            if (!form.data.slug || form.data.slug === category.slug) {
+              form.setData("slug", slugify(v));
+            }
           }}
           className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.name ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
             }`}
-          placeholder="Nama lengkap"
+          placeholder="Nama kategori"
           required
         />
         {form.errors.name && <p className="mt-1 text-xs text-red-600">{form.errors.name}</p>}
       </div>
 
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Email</label>
-        <input
-          type="email"
-          value={form.data.email}
-          onChange={(e) => {
-            form.setData("email", e.target.value);
-            if (form.errors.email) form.clearErrors("email");
-          }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.email ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
-          placeholder="user@example.com"
-          required
-        />
-        {form.errors.email && <p className="mt-1 text-xs text-red-600">{form.errors.email}</p>}
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Password (opsional)</label>
-        <input
-          type="password"
-          value={form.data.password}
-          onChange={(e) => {
-            form.setData("password", e.target.value);
-            if (form.errors.password) form.clearErrors("password");
-          }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.password ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
-          placeholder="Biarkan kosong jika tidak diubah"
-        />
-        {form.errors.password && <p className="mt-1 text-xs text-red-600">{form.errors.password}</p>}
-      </div>
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-800">Role</label>
-          <select
-            value={form.data.role}
-            onChange={(e) => form.setData("role", e.target.value as Role)}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
-          >
-            <option value="user">User</option>
-            <option value="teknisi">Teknisi</option>
-            <option value="admin">Admin</option>
-          </select>
+          <label className="mb-1 block text-sm font-medium text-gray-800">Slug</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={form.data.slug}
+              onChange={(e) => form.setData("slug", slugify(e.target.value))}
+              className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.slug ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
+                }`}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => form.setData("slug", slugify(form.data.name))}
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              title="Generate dari nama"
+            >
+              <i className="fas fa-magic" /> Buat
+            </button>
+          </div>
+          {form.errors.slug && <p className="mt-1 text-xs text-red-600">{form.errors.slug}</p>}
         </div>
+
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-800">Phone (opsional)</label>
+          <label className="mb-1 block text-sm font-medium text-gray-800">Icon (opsional)</label>
           <input
-            type="tel"
-            value={form.data.phone}
-            onChange={(e) => form.setData("phone", e.target.value)}
+            type="text"
+            value={form.data.icon}
+            onChange={(e) => form.setData("icon", e.target.value)}
             className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-            placeholder="08xx-xxxx-xxxx"
+            placeholder="emoji (🔧) atau nama file (ac.png)"
           />
+          {form.errors.icon && <p className="mt-1 text-xs text-red-600">{form.errors.icon}</p>}
         </div>
       </div>
-
-      {form.data.role === "teknisi" && (
-        <fieldset className="rounded-xl border border-gray-100 p-4">
-          <legend className="px-2 text-sm font-semibold text-gray-900">Data Rekening (teknisi)</legend>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">Bank</label>
-              <input
-                type="text"
-                value={form.data.bank_name}
-                onChange={(e) => form.setData("bank_name", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="BCA/BNI/BRI/…"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">Nama Pemilik</label>
-              <input
-                type="text"
-                value={form.data.account_name}
-                onChange={(e) => form.setData("account_name", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="Nama di buku tabungan"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">No. Rekening</label>
-              <input
-                type="text"
-                value={form.data.account_number}
-                onChange={(e) => form.setData("account_number", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="1234567890"
-              />
-            </div>
-          </div>
-        </fieldset>
-      )}
 
       <div className="pt-2">
         <button
@@ -476,51 +316,58 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
 }
 
 /* =========================================
-   PAGE: Users Index + Modals
+   NAV (selaras halaman admin lain)
 ========================================= */
-export default function AdminUsersIndex() {
-  const page = usePage<PageProps>();
-  const currentUrl = page.url; // tanpa any
-  const { auth, users, filters } = page.props;
+const NAV = [
+  { href: "/admin/dashboard", icon: "fa-tachometer-alt", label: "Dashboard" },
+  { href: "/admin/requests", icon: "fa-clipboard-list", label: "Permintaan Servis" },
+  { href: "/admin/payments", icon: "fa-receipt", label: "Pembayaran" },
+  { href: "/admin/payouts", icon: "fa-hand-holding-usd", label: "Pencairan Dana" },
+  { href: "/admin/balances", icon: "fa-balance-scale", label: "Saldo" },
+  { href: "/admin/users", icon: "fa-users", label: "Users" },
+  { href: "/admin/technician-services", icon: "fa-tools", label: "Layanan Teknisi" },
+  { href: "/admin/categories", icon: "fa-tags", label: "Kategori" },
+];
 
-  // Sidebar states (serupa dashboard)
+/* =========================================
+   Page
+========================================= */
+export default function AdminCategoriesIndex() {
+  const page = usePage<PageProps>();
+  const currentUrl = page.url;
+  const { auth, categories, filters } = page.props;
+
+  // Sidebar & modals
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Modal states
   const [openCreate, setOpenCreate] = useState(false);
-  const [editUser, setEditUser] = useState<User | null>(null);
+  const [editItem, setEditItem] = useState<Category | null>(null);
 
-  // ESC close sidebar
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSidebarOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Data
-  const items: User[] = useMemo(() => {
-    if (Array.isArray(users)) return users;
-    if (isPaginatedUsers(users)) return users.data;
+  // Data list
+  const items: Category[] = useMemo(() => {
+    if (Array.isArray(categories)) return categories;
+    if (isPaginatedCategories(categories)) return categories.data;
+    // fallback sample
     return [
-      { id: 1, name: "Agus Saputra", email: "agus@example.com", role: "user", phone: "0812-1111-2222" },
-      { id: 2, name: "Nina Rahma", email: "nina@example.com", role: "teknisi", phone: "0813-3333-4444" },
-      { id: 3, name: "Admin Satu", email: "admin@example.com", role: "admin" },
+      { id: 1, slug: "ac", name: "AC", icon: "❄️" },
+      { id: 2, slug: "tv", name: "TV", icon: "📺" },
+      { id: 3, slug: "kulkas", name: "Kulkas", icon: "🧊" },
+      { id: 4, slug: "mesin-cuci", name: "Mesin Cuci", icon: "🧺" },
     ];
-  }, [users]);
+  }, [categories]);
 
-  // Filters (main pencarian)
-  const filterForm = useForm({ q: filters?.q ?? "", role: filters?.role ?? "" });
+  // Filter form
+  const filterForm = useForm({ q: filters?.q ?? "" });
   const submitFilter: React.FormEventHandler = (e) => {
     e.preventDefault();
-    router.get("/admin/users", filterForm.data, { preserveState: true, replace: true });
-  };
-
-  // Delete
-  const delForm = useForm({});
-  const onDeleteRow = (u: User) => {
-    if (!confirm(`Hapus user "${u.name}"?`)) return;
-    delForm.delete(`/admin/users/${u.id}`, { preserveScroll: true });
+    router.get("/admin/categories", filterForm.data, { preserveState: true, replace: true });
   };
 
   // Helpers
@@ -536,7 +383,7 @@ export default function AdminUsersIndex() {
 
   return (
     <>
-      <Head title="Users — Admin" />
+      <Head title="Categories — Admin" />
       <div className="min-h-screen bg-gray-50">
         <div className="flex">
           {/* Overlay mobile */}
@@ -544,7 +391,7 @@ export default function AdminUsersIndex() {
             <div
               className="fixed inset-0 z-30 bg-black/30 backdrop-blur-[1px] md:hidden"
               onClick={() => setSidebarOpen(false)}
-              aria-hidden="true"
+              aria-hidden
             />
           )}
 
@@ -639,7 +486,7 @@ export default function AdminUsersIndex() {
                   </button>
                   <div>
                     <div className="text-xs uppercase tracking-wider text-gray-500">Admin</div>
-                    <h1 className="text-lg font-semibold text-gray-900">Users</h1>
+                    <h1 className="text-lg font-semibold text-gray-900">Kategori</h1>
                   </div>
                 </div>
 
@@ -651,6 +498,7 @@ export default function AdminUsersIndex() {
                         type="text"
                         placeholder="Cari…"
                         className="w-56 rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-gray-900/20"
+                        readOnly
                       />
                     </div>
                   </div>
@@ -670,17 +518,17 @@ export default function AdminUsersIndex() {
 
             {/* Main */}
             <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-              {/* Actions (di atas main pencarian) */}
+              {/* Actions: tombol tambah di atas main pencarian */}
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-sm text-gray-600">
-                  <span className="hidden sm:inline">Kelola data pengguna sistem.</span>
+                  <span className="hidden sm:inline">Kelola kategori servis yang tampil di aplikasi.</span>
                 </div>
                 <button
                   onClick={() => setOpenCreate(true)}
                   className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110"
                 >
-                  <i className="fas fa-user-plus" />
-                  Tambah User
+                  <i className="fas fa-plus" />
+                  Tambah Kategori
                 </button>
               </div>
 
@@ -695,23 +543,10 @@ export default function AdminUsersIndex() {
                         type="text"
                         value={filterForm.data.q}
                         onChange={(e) => filterForm.setData("q", e.target.value)}
-                        placeholder="Nama atau email…"
+                        placeholder="Nama atau slug…"
                         className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
                       />
                     </div>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Role</label>
-                    <select
-                      value={filterForm.data.role}
-                      onChange={(e) => filterForm.setData("role", e.target.value)}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
-                    >
-                      <option value="">Semua</option>
-                      <option value="user">User</option>
-                      <option value="teknisi">Teknisi</option>
-                      <option value="admin">Admin</option>
-                    </select>
                   </div>
                 </div>
                 <div className="mt-3 flex gap-2">
@@ -722,7 +557,7 @@ export default function AdminUsersIndex() {
                     <i className="fas fa-filter" /> Terapkan
                   </button>
                   <Link
-                    href="/admin/users"
+                    href="/admin/categories"
                     className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
                     preserveState
                     replace
@@ -739,36 +574,34 @@ export default function AdminUsersIndex() {
                     <thead>
                       <tr className="text-left text-gray-500">
                         <th className="py-2 pr-3">Nama</th>
-                        <th className="py-2 pr-3">Email</th>
-                        <th className="py-2 pr-3">Role</th>
-                        <th className="py-2 pr-3">Phone</th>
+                        <th className="py-2 pr-3">Slug</th>
+                        <th className="py-2 pr-3">Icon</th>
                         <th className="py-2 text-right">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {items.map((u) => (
-                        <tr key={u.id} className="text-gray-800">
-                          <td className="py-2 pr-3 font-medium">{u.name}</td>
-                          <td className="py-2 pr-3">{u.email}</td>
+                      {items.map((c) => (
+                        <tr key={c.id} className="text-gray-800">
+                          <td className="py-2 pr-3 font-medium">{c.name}</td>
+                          <td className="py-2 pr-3">{c.slug}</td>
                           <td className="py-2 pr-3">
-                            <RoleBadge role={u.role} />
+                            {c.icon ? (
+                              // jika emoji, tampilkan apa adanya; jika file, tampilkan nama file
+                              <span className="inline-flex min-w-[2rem] items-center justify-center rounded-lg border border-gray-200 px-2 py-1">
+                                {c.icon}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
                           </td>
-                          <td className="py-2 pr-3">{u.phone ?? "-"}</td>
                           <td className="py-2">
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 type="button"
-                                onClick={() => setEditUser(u)}
+                                onClick={() => setEditItem(c)}
                                 className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                               >
                                 <i className="fas fa-edit" /> Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => onDeleteRow(u)}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
-                              >
-                                <i className="fas fa-trash" /> Hapus
                               </button>
                             </div>
                           </td>
@@ -776,7 +609,7 @@ export default function AdminUsersIndex() {
                       ))}
                       {items.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="py-8 text-center text-sm text-gray-500">
+                          <td colSpan={4} className="py-8 text-center text-sm text-gray-500">
                             Tidak ada data.
                           </td>
                         </tr>
@@ -798,12 +631,12 @@ export default function AdminUsersIndex() {
       </div>
 
       {/* Modals */}
-      <Modal open={openCreate} onClose={() => setOpenCreate(false)} title="Tambah User" wide>
-        <CreateUserForm onDone={() => setOpenCreate(false)} />
+      <Modal open={openCreate} onClose={() => setOpenCreate(false)} title="Tambah Kategori" wide>
+        <CreateCategoryForm onDone={() => setOpenCreate(false)} />
       </Modal>
 
-      <Modal open={!!editUser} onClose={() => setEditUser(null)} title={`Edit User${editUser ? ` — ${editUser.name}` : ""}`} wide>
-        {editUser && <EditUserForm user={editUser} onDone={() => setEditUser(null)} />}
+      <Modal open={!!editItem} onClose={() => setEditItem(null)} title={`Edit Kategori${editItem ? ` — ${editItem.name}` : ""}`} wide>
+        {editItem && <EditCategoryForm category={editItem} onDone={() => setEditItem(null)} />}
       </Modal>
     </>
   );

@@ -17,7 +17,7 @@ class Payment extends Model
     public const STATUS_SETTLED  = 'settled';
     public const STATUS_FAILURE  = 'failure';
     public const STATUS_REFUNDED = 'refunded';
-    public const STATUS_CANCELLED= 'cancelled';
+    public const STATUS_CANCELLED = 'cancelled';
 
     protected $fillable = [
         'service_request_id',

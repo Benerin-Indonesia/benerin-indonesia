@@ -83,4 +83,5 @@ class Payout extends Model
         if ($note !== null) $this->note = $note;
         return $this->save();
     }
+
 }

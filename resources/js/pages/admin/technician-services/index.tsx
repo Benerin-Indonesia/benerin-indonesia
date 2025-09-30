@@ -1,65 +1,74 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Head, Link, useForm, usePage, router } from "@inertiajs/react";
+import { Head, Link, router, useForm, usePage } from "@inertiajs/react";
 
 /* =========================================
-   Types & helpers
+   Types
 ========================================= */
-type Role = "user" | "teknisi" | "admin";
+// type Role = "user" | "teknisi" | "admin";
 
-type User = {
+type UserLite = {
   id: number;
   name: string;
   email: string;
-  role: Role;
-  phone?: string | null;
-  bank_name?: string | null;
-  account_name?: string | null;
-  account_number?: string | null;
 };
 
-type PaginatedUsers = { data: User[] };
+type TechnicianService = {
+  id: number;
+  technician_id: number;
+  category: string; // slug kategori
+  active: boolean;
+  technician?: {
+    id: number;
+    name: string;
+    email: string;
+    phone?: string | null;
+  };
+};
+
+type Category = {
+  slug: string;
+  name: string;
+};
+
+type Paginated<T> = { data: T[] };
 
 type PageProps = {
   auth?: { user?: { name?: string } };
-  users?: PaginatedUsers | User[];
-  filters?: { q?: string; role?: string };
+  services?: Paginated<TechnicianService> | TechnicianService[];
+  technicians?: UserLite[]; // daftar user role=teknisi, untuk dropdown
+  categories?: Category[];
+  filters?: { q?: string; category?: string; active?: string };
 };
-
-const ROLE_LABEL: Record<Role, string> = {
-  user: "User",
-  teknisi: "Teknisi",
-  admin: "Admin",
-};
-
-function isPaginatedUsers(u: PageProps["users"]): u is PaginatedUsers {
-  return typeof u === "object" && u !== null && !Array.isArray(u) && Array.isArray((u as PaginatedUsers).data);
-}
 
 /* =========================================
-   Sidebar Nav (selaras dashboard)
+   Helpers
 ========================================= */
-const NAV = [
-  { href: "/admin/dashboard", icon: "fa-tachometer-alt", label: "Dashboard" },
-  { href: "/admin/requests", icon: "fa-clipboard-list", label: "Permintaan Servis" },
-  { href: "/admin/payments", icon: "fa-receipt", label: "Pembayaran" },
-  { href: "/admin/payouts", icon: "fa-hand-holding-usd", label: "Pencairan Dana" },
-  { href: "/admin/balances", icon: "fa-balance-scale", label: "Saldo" },
-  { href: "/admin/users", icon: "fa-users", label: "Users" },
-  { href: "/admin/technician-services", icon: "fa-tools", label: "Layanan Teknisi" },
-  { href: "/admin/categories", icon: "fa-tags", label: "Kategori" },
+function isPaginatedServices(
+  s: PageProps["services"]
+): s is Paginated<TechnicianService> {
+  return typeof s === "object" && s !== null && !Array.isArray(s) && Array.isArray((s as Paginated<TechnicianService>).data);
+}
+
+const DEFAULT_CATEGORIES: Category[] = [
+  { slug: "ac", name: "AC" },
+  { slug: "tv", name: "TV" },
+  { slug: "kulkas", name: "Kulkas" },
+  { slug: "mesin-cuci", name: "Mesin Cuci" },
 ];
 
 /* =========================================
-   Small UI building blocks
+   Small UI
 ========================================= */
-function RoleBadge({ role }: { role: Role }) {
-  const cls =
-    role === "admin"
-      ? "bg-gray-900 text-white"
-      : role === "teknisi"
-        ? "bg-blue-50 text-blue-700"
-        : "bg-gray-100 text-gray-700";
-  return <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${cls}`}>{ROLE_LABEL[role]}</span>;
+function StatusBadge({ active }: { active: boolean }) {
+  const cls = active
+    ? "bg-green-50 text-green-700 border-green-100"
+    : "bg-gray-100 text-gray-700 border-gray-200";
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-xs font-medium ${cls}`}>
+      <i className={`fas ${active ? "fa-check-circle" : "fa-minus-circle"}`} />
+      {active ? "Aktif" : "Nonaktif"}
+    </span>
+  );
 }
 
 function Modal({
@@ -111,157 +120,94 @@ function Modal({
 }
 
 /* =========================================
-   Create & Edit Forms (modal)
+   Forms
 ========================================= */
-function CreateUserForm({ onDone }: { onDone: () => void }) {
+function CreateServiceForm({
+  onDone,
+  categories,
+  technicians,
+}: {
+  onDone: () => void;
+  categories: Category[];
+  technicians: UserLite[];
+}) {
   type CreateForm = {
-    name: string;
-    email: string;
-    password: string;
-    role: Role;
-    phone: string;
-    bank_name: string;
-    account_name: string;
-    account_number: string;
+    technician_id: number | "";
+    category: string;
+    active: boolean;
   };
   const form = useForm<CreateForm>({
-    name: "",
-    email: "",
-    password: "",
-    role: "user",
-    phone: "",
-    bank_name: "",
-    account_name: "",
-    account_number: "",
+    technician_id: "",
+    category: categories[0]?.slug ?? "",
+    active: true,
   });
 
   const submit: React.FormEventHandler = (e) => {
     e.preventDefault();
-    form.post("/admin/users", {
+    form.post("/admin/technician-services", {
       preserveScroll: true,
       onSuccess: () => {
         form.reset();
         onDone();
-        router.reload({ only: ["users"] });
+        router.reload({ only: ["services"] });
       },
     });
   };
 
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Nama</label>
-        <input
-          type="text"
-          value={form.data.name}
-          onChange={(e) => {
-            form.setData("name", e.target.value);
-            if (form.errors.name) form.clearErrors("name");
-          }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.name ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
-          placeholder="Nama lengkap"
-          required
-        />
-        {form.errors.name && <p className="mt-1 text-xs text-red-600">{form.errors.name}</p>}
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Email</label>
-        <input
-          type="email"
-          value={form.data.email}
-          onChange={(e) => {
-            form.setData("email", e.target.value);
-            if (form.errors.email) form.clearErrors("email");
-          }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.email ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
-          placeholder="user@example.com"
-          required
-        />
-        {form.errors.email && <p className="mt-1 text-xs text-red-600">{form.errors.email}</p>}
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Password</label>
-        <input
-          type="password"
-          value={form.data.password}
-          onChange={(e) => {
-            form.setData("password", e.target.value);
-            if (form.errors.password) form.clearErrors("password");
-          }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.password ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
-          placeholder="••••••••"
-          required
-        />
-        {form.errors.password && <p className="mt-1 text-xs text-red-600">{form.errors.password}</p>}
-      </div>
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-800">Role</label>
+          <label className="mb-1 block text-sm font-medium text-gray-800">Teknisi</label>
           <select
-            value={form.data.role}
-            onChange={(e) => form.setData("role", e.target.value as Role)}
+            value={form.data.technician_id}
+            onChange={(e) => form.setData("technician_id", e.target.value ? Number(e.target.value) : "")}
             className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
+            required
           >
-            <option value="user">User</option>
-            <option value="teknisi">Teknisi</option>
-            <option value="admin">Admin</option>
+            <option value="">Pilih teknisi…</option>
+            {technicians.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} — {t.email}
+              </option>
+            ))}
           </select>
+          {form.errors.technician_id && (
+            <p className="mt-1 text-xs text-red-600">{form.errors.technician_id}</p>
+          )}
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-800">Phone (opsional)</label>
-          <input
-            type="tel"
-            value={form.data.phone}
-            onChange={(e) => form.setData("phone", e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-            placeholder="08xx-xxxx-xxxx"
-          />
+          <label className="mb-1 block text-sm font-medium text-gray-800">Kategori</label>
+          <select
+            value={form.data.category}
+            onChange={(e) => form.setData("category", e.target.value)}
+            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
+            required
+          >
+            {categories.map((c) => (
+              <option key={c.slug} value={c.slug}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          {form.errors.category && (
+            <p className="mt-1 text-xs text-red-600">{form.errors.category}</p>
+          )}
         </div>
       </div>
 
-      {form.data.role === "teknisi" && (
-        <fieldset className="rounded-xl border border-gray-100 p-4">
-          <legend className="px-2 text-sm font-semibold text-gray-900">Data Rekening (teknisi)</legend>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">Bank</label>
-              <input
-                type="text"
-                value={form.data.bank_name}
-                onChange={(e) => form.setData("bank_name", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="BCA/BNI/BRI/…"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">Nama Pemilik</label>
-              <input
-                type="text"
-                value={form.data.account_name}
-                onChange={(e) => form.setData("account_name", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="Nama di buku tabungan"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">No. Rekening</label>
-              <input
-                type="text"
-                value={form.data.account_number}
-                onChange={(e) => form.setData("account_number", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="1234567890"
-              />
-            </div>
-          </div>
-        </fieldset>
-      )}
+      <div className="flex items-center gap-3">
+        <input
+          id="create-active"
+          type="checkbox"
+          checked={form.data.active}
+          onChange={(e) => form.setData("active", e.target.checked)}
+          className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900/30"
+        />
+        <label htmlFor="create-active" className="text-sm text-gray-800">
+          Aktif
+        </label>
+      </div>
 
       <div className="pt-2">
         <button
@@ -284,46 +230,45 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
+function EditServiceForm({
+  service,
+  onDone,
+  categories,
+  technicians,
+}: {
+  service: TechnicianService;
+  onDone: () => void;
+  categories: Category[];
+  technicians: UserLite[];
+}) {
   type EditForm = {
-    name: string;
-    email: string;
-    role: Role;
-    phone: string;
-    password: string;
-    bank_name: string;
-    account_name: string;
-    account_number: string;
+    technician_id: number | "";
+    category: string;
+    active: boolean;
   };
   const form = useForm<EditForm>({
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    phone: user?.phone ?? "",
-    password: "",
-    bank_name: user?.bank_name ?? "",
-    account_name: user?.account_name ?? "",
-    account_number: user?.account_number ?? "",
+    technician_id: service.technician_id ?? "",
+    category: service.category,
+    active: service.active,
   });
 
   const submit: React.FormEventHandler = (e) => {
     e.preventDefault();
-    form.put(`/admin/users/${user.id}`, {
+    form.put(`/admin/technician-services/${service.id}`, {
       preserveScroll: true,
       onSuccess: () => {
-        form.reset("password");
         onDone();
-        router.reload({ only: ["users"] });
+        router.reload({ only: ["services"] });
       },
     });
   };
 
   const onDelete = () => {
-    if (!confirm(`Hapus user "${user.name}"?`)) return;
-    form.delete(`/admin/users/${user.id}`, {
+    if (!confirm(`Hapus layanan teknisi untuk kategori "${service.category}"?`)) return;
+    form.delete(`/admin/technician-services/${service.id}`, {
       onSuccess: () => {
         onDone();
-        router.reload({ only: ["users"] });
+        router.reload({ only: ["services"] });
       },
     });
   };
@@ -331,7 +276,7 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
       <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-500">ID: #{user.id}</span>
+        <span className="text-sm text-gray-500">ID: #{service.id}</span>
         <button
           type="button"
           onClick={onDelete}
@@ -341,118 +286,58 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
         </button>
       </div>
 
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Nama</label>
-        <input
-          type="text"
-          value={form.data.name}
-          onChange={(e) => {
-            form.setData("name", e.target.value);
-            if (form.errors.name) form.clearErrors("name");
-          }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.name ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
-          placeholder="Nama lengkap"
-          required
-        />
-        {form.errors.name && <p className="mt-1 text-xs text-red-600">{form.errors.name}</p>}
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Email</label>
-        <input
-          type="email"
-          value={form.data.email}
-          onChange={(e) => {
-            form.setData("email", e.target.value);
-            if (form.errors.email) form.clearErrors("email");
-          }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.email ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
-          placeholder="user@example.com"
-          required
-        />
-        {form.errors.email && <p className="mt-1 text-xs text-red-600">{form.errors.email}</p>}
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-800">Password (opsional)</label>
-        <input
-          type="password"
-          value={form.data.password}
-          onChange={(e) => {
-            form.setData("password", e.target.value);
-            if (form.errors.password) form.clearErrors("password");
-          }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.password ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
-          placeholder="Biarkan kosong jika tidak diubah"
-        />
-        {form.errors.password && <p className="mt-1 text-xs text-red-600">{form.errors.password}</p>}
-      </div>
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-800">Role</label>
+          <label className="mb-1 block text-sm font-medium text-gray-800">Teknisi</label>
           <select
-            value={form.data.role}
-            onChange={(e) => form.setData("role", e.target.value as Role)}
+            value={form.data.technician_id}
+            onChange={(e) => form.setData("technician_id", e.target.value ? Number(e.target.value) : "")}
             className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
+            required
           >
-            <option value="user">User</option>
-            <option value="teknisi">Teknisi</option>
-            <option value="admin">Admin</option>
+            <option value="">Pilih teknisi…</option>
+            {technicians.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} — {t.email}
+              </option>
+            ))}
           </select>
+          {form.errors.technician_id && (
+            <p className="mt-1 text-xs text-red-600">{form.errors.technician_id}</p>
+          )}
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-800">Phone (opsional)</label>
-          <input
-            type="tel"
-            value={form.data.phone}
-            onChange={(e) => form.setData("phone", e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-            placeholder="08xx-xxxx-xxxx"
-          />
+          <label className="mb-1 block text-sm font-medium text-gray-800">Kategori</label>
+          <select
+            value={form.data.category}
+            onChange={(e) => form.setData("category", e.target.value)}
+            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
+            required
+          >
+            {categories.map((c) => (
+              <option key={c.slug} value={c.slug}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          {form.errors.category && (
+            <p className="mt-1 text-xs text-red-600">{form.errors.category}</p>
+          )}
         </div>
       </div>
 
-      {form.data.role === "teknisi" && (
-        <fieldset className="rounded-xl border border-gray-100 p-4">
-          <legend className="px-2 text-sm font-semibold text-gray-900">Data Rekening (teknisi)</legend>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">Bank</label>
-              <input
-                type="text"
-                value={form.data.bank_name}
-                onChange={(e) => form.setData("bank_name", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="BCA/BNI/BRI/…"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">Nama Pemilik</label>
-              <input
-                type="text"
-                value={form.data.account_name}
-                onChange={(e) => form.setData("account_name", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="Nama di buku tabungan"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">No. Rekening</label>
-              <input
-                type="text"
-                value={form.data.account_number}
-                onChange={(e) => form.setData("account_number", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="1234567890"
-              />
-            </div>
-          </div>
-        </fieldset>
-      )}
+      <div className="flex items-center gap-3">
+        <input
+          id="edit-active"
+          type="checkbox"
+          checked={form.data.active}
+          onChange={(e) => form.setData("active", e.target.checked)}
+          className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900/30"
+        />
+        <label htmlFor="edit-active" className="text-sm text-gray-800">
+          Aktif
+        </label>
+      </div>
 
       <div className="pt-2">
         <button
@@ -476,51 +361,74 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
 }
 
 /* =========================================
-   PAGE: Users Index + Modals
+   Page
 ========================================= */
-export default function AdminUsersIndex() {
-  const page = usePage<PageProps>();
-  const currentUrl = page.url; // tanpa any
-  const { auth, users, filters } = page.props;
+const NAV = [
+  { href: "/admin/dashboard", icon: "fa-tachometer-alt", label: "Dashboard" },
+  { href: "/admin/requests", icon: "fa-clipboard-list", label: "Permintaan Servis" },
+  { href: "/admin/payments", icon: "fa-receipt", label: "Pembayaran" },
+  { href: "/admin/payouts", icon: "fa-hand-holding-usd", label: "Pencairan Dana" },
+  { href: "/admin/balances", icon: "fa-balance-scale", label: "Saldo" },
+  { href: "/admin/users", icon: "fa-users", label: "Users" },
+  { href: "/admin/technician-services", icon: "fa-tools", label: "Layanan Teknisi" },
+  { href: "/admin/categories", icon: "fa-tags", label: "Kategori" },
+];
 
-  // Sidebar states (serupa dashboard)
+export default function AdminTechnicianServicesIndex() {
+  const page = usePage<PageProps>();
+  const currentUrl = page.url;
+  const { auth, services, filters } = page.props;
+
+  const categories = useMemo<Category[]>(
+    () => (page.props.categories && page.props.categories.length > 0 ? page.props.categories : DEFAULT_CATEGORIES),
+    [page.props.categories]
+  );
+  const technicians = useMemo<UserLite[]>(
+    () =>
+      page.props.technicians && page.props.technicians.length > 0
+        ? page.props.technicians
+        : [
+          { id: 2, name: "Nina Rahma", email: "nina@example.com" },
+          { id: 5, name: "Budi Santoso", email: "budi@example.com" },
+        ],
+    [page.props.technicians]
+  );
+
+  // Sidebar & modals
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Modal states
   const [openCreate, setOpenCreate] = useState(false);
-  const [editUser, setEditUser] = useState<User | null>(null);
+  const [editItem, setEditItem] = useState<TechnicianService | null>(null);
 
-  // ESC close sidebar
+  // Keyboard ESC to close sidebar
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSidebarOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Data
-  const items: User[] = useMemo(() => {
-    if (Array.isArray(users)) return users;
-    if (isPaginatedUsers(users)) return users.data;
+  // Data list
+  const items: TechnicianService[] = useMemo(() => {
+    if (Array.isArray(services)) return services;
+    if (isPaginatedServices(services)) return services.data;
+    // fallback sample
     return [
-      { id: 1, name: "Agus Saputra", email: "agus@example.com", role: "user", phone: "0812-1111-2222" },
-      { id: 2, name: "Nina Rahma", email: "nina@example.com", role: "teknisi", phone: "0813-3333-4444" },
-      { id: 3, name: "Admin Satu", email: "admin@example.com", role: "admin" },
+      { id: 1, technician_id: 2, category: "ac", active: true, technician: { id: 2, name: "Nina Rahma", email: "nina@example.com" } },
+      { id: 2, technician_id: 5, category: "tv", active: false, technician: { id: 5, name: "Budi Santoso", email: "budi@example.com" } },
     ];
-  }, [users]);
+  }, [services]);
 
-  // Filters (main pencarian)
-  const filterForm = useForm({ q: filters?.q ?? "", role: filters?.role ?? "" });
+  // Filter form
+  const filterForm = useForm({
+    q: filters?.q ?? "",
+    category: filters?.category ?? "",
+    active: filters?.active ?? "",
+  });
+
   const submitFilter: React.FormEventHandler = (e) => {
     e.preventDefault();
-    router.get("/admin/users", filterForm.data, { preserveState: true, replace: true });
-  };
-
-  // Delete
-  const delForm = useForm({});
-  const onDeleteRow = (u: User) => {
-    if (!confirm(`Hapus user "${u.name}"?`)) return;
-    delForm.delete(`/admin/users/${u.id}`, { preserveScroll: true });
+    router.get("/admin/technician-services", filterForm.data, { preserveState: true, replace: true });
   };
 
   // Helpers
@@ -534,9 +442,13 @@ export default function AdminUsersIndex() {
   const sideWidth = sidebarCollapsed ? "md:w-20" : "md:w-72";
   const contentPadLeft = sidebarCollapsed ? "md:pl-20" : "md:pl-72";
 
+  // Category name helper
+  const categoryName = (slug: string) =>
+    categories.find((c) => c.slug === slug)?.name ?? slug;
+
   return (
     <>
-      <Head title="Users — Admin" />
+      <Head title="Layanan Teknisi — Admin" />
       <div className="min-h-screen bg-gray-50">
         <div className="flex">
           {/* Overlay mobile */}
@@ -544,7 +456,7 @@ export default function AdminUsersIndex() {
             <div
               className="fixed inset-0 z-30 bg-black/30 backdrop-blur-[1px] md:hidden"
               onClick={() => setSidebarOpen(false)}
-              aria-hidden="true"
+              aria-hidden
             />
           )}
 
@@ -639,7 +551,7 @@ export default function AdminUsersIndex() {
                   </button>
                   <div>
                     <div className="text-xs uppercase tracking-wider text-gray-500">Admin</div>
-                    <h1 className="text-lg font-semibold text-gray-900">Users</h1>
+                    <h1 className="text-lg font-semibold text-gray-900">Layanan Teknisi</h1>
                   </div>
                 </div>
 
@@ -651,6 +563,7 @@ export default function AdminUsersIndex() {
                         type="text"
                         placeholder="Cari…"
                         className="w-56 rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-gray-900/20"
+                        readOnly
                       />
                     </div>
                   </div>
@@ -670,50 +583,65 @@ export default function AdminUsersIndex() {
 
             {/* Main */}
             <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-              {/* Actions (di atas main pencarian) */}
+              {/* Actions: tombol tambah di atas main pencarian */}
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-sm text-gray-600">
-                  <span className="hidden sm:inline">Kelola data pengguna sistem.</span>
+                  <span className="hidden sm:inline">Kelola kategori layanan yang diambil oleh teknisi.</span>
                 </div>
                 <button
                   onClick={() => setOpenCreate(true)}
                   className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110"
                 >
-                  <i className="fas fa-user-plus" />
-                  Tambah User
+                  <i className="fas fa-plus" />
+                  Tambah Layanan
                 </button>
               </div>
 
               {/* Filter (main pencarian) */}
               <form onSubmit={submitFilter} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <div className="sm:col-span-2">
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Cari</label>
+                  <div className="sm:col-span-1">
+                    <label className="mb-1 block text-xs font-medium text-gray-600">Cari (nama/email teknisi)</label>
                     <div className="relative">
                       <i className="fas fa-search pointer-events-none absolute left-3 top-2.5 text-gray-400" />
                       <input
                         type="text"
                         value={filterForm.data.q}
                         onChange={(e) => filterForm.setData("q", e.target.value)}
-                        placeholder="Nama atau email…"
+                        placeholder="Misal: Nina…"
                         className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Role</label>
+                  <div className="sm:col-span-1">
+                    <label className="mb-1 block text-xs font-medium text-gray-600">Kategori</label>
                     <select
-                      value={filterForm.data.role}
-                      onChange={(e) => filterForm.setData("role", e.target.value)}
+                      value={filterForm.data.category}
+                      onChange={(e) => filterForm.setData("category", e.target.value)}
                       className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
                     >
                       <option value="">Semua</option>
-                      <option value="user">User</option>
-                      <option value="teknisi">Teknisi</option>
-                      <option value="admin">Admin</option>
+                      {categories.map((c) => (
+                        <option key={c.slug} value={c.slug}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-1">
+                    <label className="mb-1 block text-xs font-medium text-gray-600">Status</label>
+                    <select
+                      value={filterForm.data.active}
+                      onChange={(e) => filterForm.setData("active", e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
+                    >
+                      <option value="">Semua</option>
+                      <option value="1">Aktif</option>
+                      <option value="0">Nonaktif</option>
                     </select>
                   </div>
                 </div>
+
                 <div className="mt-3 flex gap-2">
                   <button
                     type="submit"
@@ -722,7 +650,7 @@ export default function AdminUsersIndex() {
                     <i className="fas fa-filter" /> Terapkan
                   </button>
                   <Link
-                    href="/admin/users"
+                    href="/admin/technician-services"
                     className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
                     preserveState
                     replace
@@ -738,42 +666,40 @@ export default function AdminUsersIndex() {
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="text-left text-gray-500">
-                        <th className="py-2 pr-3">Nama</th>
+                        <th className="py-2 pr-3">Teknisi</th>
                         <th className="py-2 pr-3">Email</th>
-                        <th className="py-2 pr-3">Role</th>
-                        <th className="py-2 pr-3">Phone</th>
+                        <th className="py-2 pr-3">Kategori</th>
+                        <th className="py-2 pr-3">Status</th>
                         <th className="py-2 text-right">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {items.map((u) => (
-                        <tr key={u.id} className="text-gray-800">
-                          <td className="py-2 pr-3 font-medium">{u.name}</td>
-                          <td className="py-2 pr-3">{u.email}</td>
-                          <td className="py-2 pr-3">
-                            <RoleBadge role={u.role} />
+                      {items.map((s) => (
+                        <tr key={s.id} className="text-gray-800">
+                          <td className="py-2 pr-3 font-medium">
+                            {s.technician?.name ?? technicians.find((t) => t.id === s.technician_id)?.name ?? `#${s.technician_id}`}
                           </td>
-                          <td className="py-2 pr-3">{u.phone ?? "-"}</td>
+                          <td className="py-2 pr-3">
+                            {s.technician?.email ?? technicians.find((t) => t.id === s.technician_id)?.email ?? "-"}
+                          </td>
+                          <td className="py-2 pr-3">{categoryName(s.category)}</td>
+                          <td className="py-2 pr-3">
+                            <StatusBadge active={s.active} />
+                          </td>
                           <td className="py-2">
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 type="button"
-                                onClick={() => setEditUser(u)}
+                                onClick={() => setEditItem(s)}
                                 className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                               >
                                 <i className="fas fa-edit" /> Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => onDeleteRow(u)}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
-                              >
-                                <i className="fas fa-trash" /> Hapus
                               </button>
                             </div>
                           </td>
                         </tr>
                       ))}
+
                       {items.length === 0 && (
                         <tr>
                           <td colSpan={5} className="py-8 text-center text-sm text-gray-500">
@@ -798,12 +724,28 @@ export default function AdminUsersIndex() {
       </div>
 
       {/* Modals */}
-      <Modal open={openCreate} onClose={() => setOpenCreate(false)} title="Tambah User" wide>
-        <CreateUserForm onDone={() => setOpenCreate(false)} />
+      <Modal open={openCreate} onClose={() => setOpenCreate(false)} title="Tambah Layanan Teknisi" wide>
+        <CreateServiceForm
+          onDone={() => setOpenCreate(false)}
+          categories={categories}
+          technicians={technicians}
+        />
       </Modal>
 
-      <Modal open={!!editUser} onClose={() => setEditUser(null)} title={`Edit User${editUser ? ` — ${editUser.name}` : ""}`} wide>
-        {editUser && <EditUserForm user={editUser} onDone={() => setEditUser(null)} />}
+      <Modal
+        open={!!editItem}
+        onClose={() => setEditItem(null)}
+        title={`Edit Layanan${editItem ? ` — #${editItem.id}` : ""}`}
+        wide
+      >
+        {editItem && (
+          <EditServiceForm
+            service={editItem}
+            onDone={() => setEditItem(null)}
+            categories={categories}
+            technicians={technicians}
+          />
+        )}
       </Modal>
     </>
   );

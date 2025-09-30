@@ -63,13 +63,13 @@ function BadgePay({ s }: { s: RecentPayment["status"] }) {
 
 const NAV = [
   { href: "/admin/dashboard", icon: "fa-tachometer-alt", label: "Dashboard" },
-  { href: "/admin/requests", icon: "fa-clipboard-list", label: "Service Requests" },
-  { href: "/admin/payments", icon: "fa-receipt", label: "Payments" },
-  { href: "/admin/payouts", icon: "fa-hand-holding-usd", label: "Payouts" },
-  { href: "/admin/balances", icon: "fa-balance-scale", label: "Balances" },
+  { href: "/admin/requests", icon: "fa-clipboard-list", label: "Permintaan Servis" },
+  { href: "/admin/payments", icon: "fa-receipt", label: "Pembayaran" },
+  { href: "/admin/payouts", icon: "fa-hand-holding-usd", label: "Pencairan Dana" },
+  { href: "/admin/balances", icon: "fa-balance-scale", label: "Saldo" },
   { href: "/admin/users", icon: "fa-users", label: "Users" },
-  { href: "/admin/technician-services", icon: "fa-tools", label: "Technician Services" },
-  { href: "/admin/categories", icon: "fa-tags", label: "Categories" },
+  { href: "/admin/technician-services", icon: "fa-tools", label: "Layanan Teknisi" },
+  { href: "/admin/categories", icon: "fa-tags", label: "Kategori" },
 ];
 
 export default function AdminDashboard() {
@@ -88,28 +88,31 @@ export default function AdminDashboard() {
 
   // Dummy fallback
   const s: AdminStats = {
-    requests_total: stats?.requests_total ?? 128,
-    requests_open: stats?.requests_open ?? 23,
-    payments_pending: stats?.payments_pending ?? 4,
-    payouts_pending: stats?.payouts_pending ?? 2,
-    users_total: stats?.users_total ?? 842,
-    technicians_total: stats?.technicians_total ?? 117,
-    balance_hold: stats?.balance_hold ?? 18500000,
+    requests_total: stats?.requests_total ?? 0,
+    requests_open: stats?.requests_open ?? 0,
+    payments_pending: stats?.payments_pending ?? 0,
+    payouts_pending: stats?.payouts_pending ?? 0,
+    users_total: stats?.users_total ?? 0,
+    technicians_total: stats?.technicians_total ?? 0,
+    balance_hold: stats?.balance_hold ?? 0,
   };
-  const reqs: RecentRequest[] =
-    recentRequests ?? [
-      { id: 3012, user_name: "Agus", category: "AC", status: "menunggu", created_at: "2025-09-25 10:21" },
-      { id: 3011, user_name: "Sari", category: "TV", status: "diproses", created_at: "2025-09-25 09:10" },
-      { id: 3009, user_name: "Budi", category: "Kulkas", status: "dijadwalkan", created_at: "2025-09-24 16:44" },
-      { id: 3007, user_name: "Nina", category: "Mesin Cuci", status: "selesai", created_at: "2025-09-24 14:03" },
-    ];
-  const pays: RecentPayment[] =
-    recentPayments ?? [
-      { id: 9007, request_id: 3009, user_name: "Budi", amount: 350000, status: "pending", updated_at: "2025-09-25 10:02" },
-      { id: 9006, request_id: 3007, user_name: "Nina", amount: 275000, status: "settled", updated_at: "2025-09-24 14:30" },
-      { id: 9005, request_id: 2998, user_name: "Dewi", amount: 420000, status: "failure", updated_at: "2025-09-24 12:11" },
-      { id: 9004, request_id: 2995, user_name: "Rizki", amount: 310000, status: "refunded", updated_at: "2025-09-24 10:07" },
-    ];
+
+  const reqs: RecentRequest[] = recentRequests ?? [];
+  const pays: RecentPayment[] = recentPayments ?? [];
+  // const reqs: RecentRequest[] =
+  //   recentRequests ?? [
+  //     { id: 3012, user_name: "Agus", category: "AC", status: "menunggu", created_at: "2025-09-25 10:21" },
+  //     { id: 3011, user_name: "Sari", category: "TV", status: "diproses", created_at: "2025-09-25 09:10" },
+  //     { id: 3009, user_name: "Budi", category: "Kulkas", status: "dijadwalkan", created_at: "2025-09-24 16:44" },
+  //     { id: 3007, user_name: "Nina", category: "Mesin Cuci", status: "selesai", created_at: "2025-09-24 14:03" },
+  //   ];
+  // const pays: RecentPayment[] =
+  //   recentPayments ?? [
+  //     { id: 9007, request_id: 3009, user_name: "Budi", amount: 350000, status: "pending", updated_at: "2025-09-25 10:02" },
+  //     { id: 9006, request_id: 3007, user_name: "Nina", amount: 275000, status: "settled", updated_at: "2025-09-24 14:30" },
+  //     { id: 9005, request_id: 2998, user_name: "Dewi", amount: 420000, status: "failure", updated_at: "2025-09-24 12:11" },
+  //     { id: 9004, request_id: 2995, user_name: "Rizki", amount: 310000, status: "refunded", updated_at: "2025-09-24 10:07" },
+  //   ];
 
   const isActive = (href: string) => currentUrl.startsWith(href);
 
@@ -199,10 +202,30 @@ export default function AdminDashboard() {
               })}
             </nav>
 
-            {/* Footer kecil di sidebar */}
-            <div className="mt-6 border-t border-gray-100 pt-4 text-center text-xs text-gray-500">
-              {!sidebarCollapsed && <>© {new Date().getFullYear()} Benerin Indonesia</>}
-              {sidebarCollapsed && <span className="block text-[10px]">© {new Date().getFullYear()}</span>}
+            <div className="mt-auto">
+              {/* Tombol Logout (POST Inertia) */}
+              <Link
+                href="/admin/logout"       // ganti ke "/logout" jika pakai route default Laravel
+                method="post"
+                as="button"
+                className={[
+                  "mt-4 w-full",
+                  "flex items-center rounded-xl px-3 py-2 text-sm font-semibold transition",
+                  "border border-red-100 text-red-700 hover:bg-red-50",
+                  sidebarCollapsed ? "justify-center" : "gap-3",
+                ].join(" ")}
+              >
+                <span className="grid h-9 w-9 place-items-center rounded-lg bg-red-50 text-red-600">
+                  <i className="fas fa-sign-out-alt" />
+                </span>
+                {!sidebarCollapsed && <span>Logout</span>}
+              </Link>
+
+              {/* Footer kecil di sidebar */}
+              <div className="mt-4 border-t border-gray-100 pt-4 text-center text-xs text-gray-500">
+                {!sidebarCollapsed && <>© {new Date().getFullYear()} Benerin Indonesia</>}
+                {sidebarCollapsed && <span className="block text-[10px]">© {new Date().getFullYear()}</span>}
+              </div>
             </div>
           </aside>
 

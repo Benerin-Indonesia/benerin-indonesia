@@ -147,7 +147,9 @@ class ServiceRequest extends Model
         return $q->where(function (Builder $sub) use ($term) {
             $sub->where('description', 'like', "%{$term}%")
                 ->orWhere('category', 'like', "%{$term}%")
-                ->orWhereHas('user', fn (Builder $uq) =>
+                ->orWhereHas(
+                    'user',
+                    fn(Builder $uq) =>
                     $uq->where('name', 'like', "%{$term}%")
                 );
         });
