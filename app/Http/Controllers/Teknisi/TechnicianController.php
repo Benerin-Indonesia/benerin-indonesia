@@ -24,10 +24,10 @@ class TechnicianController extends Controller
 
         $tasks = [
             'today' => ServiceRequest::where('technician_id', $technician_id)
-                ->whereDate('created_at', today())
+                ->where('status', 'menunggu')
                 ->count(),
             'in_progress' => ServiceRequest::where('technician_id', $technician_id)
-                ->where('status', 'dalam proses')
+                ->where('status', 'diproses')
                 ->count(),
             'revenue_today' => 0, // Placeholder before implementation
         ];

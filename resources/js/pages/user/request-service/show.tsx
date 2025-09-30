@@ -6,25 +6,23 @@ const PRIMARY = "#206BB0";
 export default function Show() {
     const { props } = usePage();
     const { request } = props;
-    
-    // State untuk input chat
+
+    // State input chat
     const [newMessage, setNewMessage] = useState("");
 
-    // State untuk modal harga
-    const [showModal, setShowModal] = useState(false);
-
-    // Form untuk penawaran harga
-    const { data, setData, post, processing, errors, reset } = useForm({
-        offer_price: "",
-        request_id: request.id,
-    });
-
-    // State dummy untuk chat
+    // State pesan chat (dummy)
     const [messages, setMessages] = useState([
         { id: 1, from: "user", text: "Halo teknisi, bisa datang jam 10?" },
         { id: 2, from: "teknisi", text: "Bisa kak, saya otw ya." },
     ]);
-    // Chat kirim pesan
+
+    // Form inertia (untuk accept/reject)
+    const { post, processing } = useForm({});
+
+    // Modal konfirmasi aksi
+    const [actionType, setActionType] = useState<"accept" | "reject" | null>(null);
+
+    // === CHAT handler ===
     const handleSend = (e: React.FormEvent) => {
         e.preventDefault();
         if (!newMessage.trim()) return;
@@ -35,56 +33,48 @@ export default function Show() {
         setNewMessage("");
     };
 
-    const handleSubmitPrice = (e: React.FormEvent) => {
-        e.preventDefault();
+    // === Konfirmasi aksi (Terima/Tolak) ===
+    const handleConfirm = () => {
+        if (!actionType) return;
 
-        post("/user/permintaan-harga", {
-            offer_price: data.offer_price,
-            request_id: data.request_id,
+        const url =
+            actionType === "accept"
+                ? `/user/permintaan/${request.id}/accept-price`
+                : `/user/permintaan/${request.id}/reject-price`;
+
+        post(url, {
+            preserveScroll: true,
             onSuccess: () => {
-                reset(); // kosongkan form
-                setShowModal(false);
+                setActionType(null); // Tutup modal
             },
-            onError: (errors) => {
-                console.log(errors);
+            onError: (err) => {
+                console.error(err);
             },
         });
     };
-    function formatRupiah(angka) {
-        // 1. Cek jika input null, undefined, atau bukan angka
-        if (angka === null || angka === undefined) {
-            return "Belum ditetapkan";
-        }
 
-        // 2. Mengatasi format dari database (misal: 30000.0)
-        // parseFloat akan mengubahnya menjadi angka 30000
-        const number = parseFloat(angka);
-
-        // 3. Jika setelah diubah hasilnya bukan angka (NaN), kembalikan default
-        if (isNaN(number)) {
-            return "Belum ditetapkan";
-        }
-
-        // 4. Gunakan Intl.NumberFormat untuk format ke Rupiah
-        const formatter = new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0, // <-- Kunci untuk menghilangkan ,00
+    // === Helper ===
+    function formatRupiah(angka: number | string | null) {
+        if (angka === null || angka === undefined) return "Belum ditetapkan Teknisi";
+        const number = parseFloat(angka as string);
+        if (isNaN(number)) return "Belum ditetapkan Teknisi";
+        return new Intl.NumberFormat("id-ID", {
+            style: "currency",
+            currency: "IDR",
+            minimumFractionDigits: 0,
             maximumFractionDigits: 0,
-        });
-
-        return formatter.format(number);
+        }).format(number);
     }
+
     function formatDate(dateString: string) {
         const date = new Date(dateString);
-        // format: 30 Sep 2025, 22:33
         return date.toLocaleString("id-ID", {
             day: "2-digit",
             month: "short",
             year: "numeric",
             hour: "2-digit",
             minute: "2-digit",
-            hour12: false, // gunakan format 24 jam
+            hour12: false,
         });
     }
 
@@ -150,25 +140,45 @@ export default function Show() {
                             </div>
 
                             <div>
-                                <dt className="text-sm font-medium text-gray-500">
-                                    Status
-                                </dt>
+                                <dt className="text-sm font-medium text-gray-500">Status</dt>
                                 <dd className="mt-1">
-                                    <span className="inline-flex items-center rounded-lg bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-700">
-                                        {request.status || "Menunggu"}
+                                    <span
+                                        className={`inline-flex items-center rounded-lg px-3 py-1 text-sm font-semibold ${request.status === "selesai"
+                                            ? "bg-green-100 text-green-700"
+                                            : request.status === "diproses"
+                                                ? "bg-blue-100 text-blue-700"
+                                                : request.status === "dijadwalkan"
+                                                    ? "bg-orange-100 text-orange-700"
+                                                    : request.status === "dibatalkan"
+                                                        ? "bg-gray-200 text-gray-600"
+                                                        : "bg-gray-100 text-gray-700"
+                                            }`}
+                                    >
+                                        {request.status === "dijadwalkan"
+                                            ? "Menunggu pembayaran"
+                                            : request.status || "Menunggu"}
                                     </span>
                                 </dd>
                             </div>
 
+
                             <div>
                                 <dt className="text-sm font-medium text-gray-500">
-                                    Harga
+                                    {!request.accepted_price
+                                        ? "Harga Penawaran"
+                                        : request.status === "diproses"
+                                            ? "Lunas"
+                                            : request.status === "dijadwalkan"
+                                                ? "Harus dibayar"
+                                                : "Harga Penawaran"}
                                 </dt>
                                 <dd className="mt-1">
-                                    <span className={`inline-flex items-center rounded-lg px-3 py-1 text-sm font-semibold ${request.accepted_price
-                                        ? "bg-green-100 text-green-700" // 
-                                        : "bg-orange-100 text-orange-700" //
-                                        }`}>
+                                    <span
+                                        className={`inline-flex items-center rounded-lg px-3 py-1 text-sm font-semibold ${request.accepted_price
+                                            ? "bg-green-100 text-green-700"
+                                            : "bg-orange-100 text-orange-700"
+                                            }`}
+                                    >
                                         {formatRupiah(request.accepted_price)}
                                     </span>
                                 </dd>
@@ -177,27 +187,74 @@ export default function Show() {
 
                         {/* Tombol aksi */}
                         <div className="mt-auto flex gap-3 pt-6">
-                            {/* Tombol buka modal */}
-                            <button
-                                onClick={() => setShowModal(true)}
-                                className="inline-flex items-center cursor-pointer gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md"
-                                style={{ backgroundColor: PRIMARY }}
-                            >
-                                <i className="fas fa-paper-plane" /> Buat Penawaran Harga
-                            </button>
+                            <div className="flex gap-3 pt-6">
+                                {request.status === "menunggu" && request.accepted_price !== null && (
+                                    <>
+                                        {/* Tombol Terima */}
+                                        <button
+                                            onClick={() => setActionType("accept")}
+                                            className="inline-flex items-center gap-2 cursor-pointer rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow transition-colors duration-150 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                                        >
+                                            <i className="fas fa-check-circle"></i>
+                                            Terima Penawaran
+                                        </button>
 
-                            {/* Tombol Batalkan */}
-                            {/* <Link
-                                href={`/teknisi/penawaran/tolak?request=${request.id}`}
-                                className="inline-flex items-center justify-center rounded-xl border border-transparent bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
-                            >
-                                <i className="fas fa-times mr-2"></i>
-                                Tolak Permintaan
-                            </Link> */}
+                                        {/* Tombol Tolak */}
+                                        <button
+                                            onClick={() => setActionType("reject")}
+                                            className="inline-flex items-center gap-2 cursor-pointer rounded-xl border border-red-700 bg-transparent px-5 py-2 text-sm font-semibold text-red-700 shadow-sm transition-colors duration-150 hover:bg-red-700/10 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                                        >
+                                            <i className="fas fa-times-circle"></i>
+                                            Tolak Penawaran
+                                        </button>
+                                    </>
+                                )}
+
+                                {request.status === "dijadwalkan" && (
+                                    <button
+                                        onClick={() => console.log("Bayar")}
+                                        className="inline-flex cursor-pointer items-center gap-2 rounded-sm bg-[#206BB0] px-5 py-2 text-sm font-semibold text-white shadow transition-colors duration-150 hover:bg-[#206BB0] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                    >
+                                        <i className="fas fa-credit-card"></i>
+                                        Bayar
+                                    </button>
+                                )}
+
+                                {request.status === "diproses" && (
+                                    <button
+                                        disabled
+                                        className="inline-flex items-center gap-2 rounded-xl bg-gray-400 px-5 py-3 text-sm font-semibold text-white shadow cursor-not-allowed"
+                                    >
+                                        <i className="fas fa-tools"></i>
+                                        Sedang berlangsung
+                                    </button>
+                                )}
+
+                                {request.status === "selesai" && (
+                                    <button
+                                        disabled
+                                        className="inline-flex items-center gap-2 rounded-xl bg-gray-500 px-5 py-2 text-sm font-semibold text-white shadow cursor-not-allowed"
+                                    >
+                                        <i className="fas fa-check-double"></i>
+                                        Layanan Anda sudah selesai
+                                    </button>
+                                )}
+
+                                {request.status === "dibatalkan" && (
+                                    <button
+                                        disabled
+                                        className="inline-flex items-center gap-2 rounded-xl bg-gray-300 px-5 py-2 text-sm font-semibold text-gray-600 shadow cursor-not-allowed"
+                                    >
+                                        <i className="fas fa-ban"></i>
+                                        Layanan dibatalkan (Maintenance)
+                                    </button>
+                                )}
+                            </div>
+
                         </div>
                     </div>
 
-                    {/* Panel Samping (Chat) */}
+                    {/* Panel Chat */}
                     <div className="col-span-1 border rounded-lg overflow-hidden flex flex-col gap-6">
                         <div className="bg-white rounded-lg shadow-sm p-4 flex flex-col h-auto lg:h-full">
                             <h2 className="text-base font-semibold text-gray-800 mb-3">
@@ -236,7 +293,7 @@ export default function Show() {
                                 />
                                 <button
                                     type="submit"
-                                    className="rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm"
+                                    className="cursor-pointer rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm"
                                     style={{ backgroundColor: PRIMARY }}
                                 >
                                     ➤
@@ -247,48 +304,42 @@ export default function Show() {
                 </div>
             </main>
 
-            {/* Modal Pop-up */}
-            {showModal && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center transition-opacity"
-                    style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}
-                >
-                    <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md animate-fade-in-up">
-                        <h2 className="text-lg font-semibold mb-4">
-                            Buat Penawaran Harga
+            {/* Modal Konfirmasi */}
+            {actionType && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
+                        <h2 className="text-lg font-semibold text-gray-800 mb-4">
+                            {actionType === "accept"
+                                ? "Terima Penawaran Harga"
+                                : "Tolak Penawaran Harga"}
                         </h2>
-                        <form onSubmit={handleSubmitPrice} className="space-y-4">
-                            <input
-                                type="number"
-                                value={data.offer_price}
-                                onChange={(e) =>
-                                    setData("offer_price", e.target.value)
-                                }
-                                placeholder="Masukkan harga"
-                                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-                            />
-                            {errors.offer_price && (
-                                <p className="text-red-500 text-sm">
-                                    {errors.offer_price}
-                                </p>
-                            )}
-                            <div className="flex justify-end gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className="px-4 py-2 cursor-pointer rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                                >
-                                    Batal
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={processing}
-                                    className="px-4 py-2 cursor-pointer rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700"
-                                >
-                                    {processing ? "Menyimpan..." : "Simpan"}
-                                </button>
-                            </div>
-                        </form>
+                        <p className="text-sm text-gray-600 mb-6">
+                            Apakah Anda yakin ingin{" "}
+                            {actionType === "accept"
+                                ? "menerima"
+                                : "menolak"}{" "}
+                            penawaran harga ini?
+                        </p>
+
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => setActionType(null)}
+                                className="px-4 py-2 rounded-lg cursor-pointer border text-gray-700 hover:bg-gray-100"
+                                disabled={processing}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={handleConfirm}
+                                disabled={processing}
+                                className={`px-4 py-2 rounded-lg cursor-pointer font-semibold text-white ${actionType === "accept"
+                                    ? "bg-emerald-600 hover:bg-emerald-700"
+                                    : "bg-red-600 hover:bg-red-700"
+                                    }`}
+                            >
+                                {processing ? "Memproses..." : "Ya, Lanjutkan"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

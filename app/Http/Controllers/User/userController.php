@@ -18,16 +18,16 @@ class userController extends Controller
 
         $user_id = $user->id;
 
-        $categories = Category::select('id', 'slug', 'name', 'icon', 'hint')->limit(4)->get();
-        // $categories = Category::select('id', 'slug', 'name', 'icon', 'hint')->get(); // NO LIMIT
+        // $categories = Category::select('id', 'slug', 'name', 'icon', 'hint')->limit(4)->get();
+        $categories = Category::select('id', 'slug', 'name', 'icon', 'hint')->get(); // NO LIMIT
         // dd($categories);
 
         $tasks = [
             'active' => ServiceRequest::where('user_id', $user_id)
-                ->whereDate('created_at', today())
+                ->where('status', 'menunggu')
                 ->count(),
             'scheduled' => ServiceRequest::where('user_id', $user_id)
-                ->where('status', 'dalam proses')
+                ->where('status', 'diproses')
                 ->count(),
             'completed' => ServiceRequest::where('user_id', $user_id)
                 ->where('status', 'selesai')

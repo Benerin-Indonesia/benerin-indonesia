@@ -45,8 +45,12 @@ Route::prefix('user')->name('user.')->group(function () {
         //     return Inertia::render('user/dashboard');
         // })->name('dashboard');
         Route::get('/dashboard', [App\Http\Controllers\User\UserController::class, 'index'])->name('dashboard');
+
+        // handle permintaan user
         Route::get('/permintaan/{id}', [UserServiceRequestController::class, 'show'])->name('permintaan.show');
         Route::post('/permintaan-harga', [UserServiceRequestController::class, 'createPrice'])->name('technician-service.request-price');
+        Route::post('/permintaan/{id}/accept-price', [UserServiceRequestController::class, 'acceptPrice'])->name('technician-service.accept-price');
+        Route::post('/permintaan/{id}/reject-price', [UserServiceRequestController::class, 'rejectPrice'])->name('technician-service.reject-price');
     });
 });
 

@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\ServiceRequest;
 use App\Models\TechnicianService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -27,29 +28,73 @@ class ServiceRequestController extends Controller
         ]);
     }
 
-    public function createPrice(Request $request)
+    // public function createPrice(Request $request)
+    // {
+    //     $request->validate([
+    //         'request_id' => 'required|exists:service_requests,id',
+    //         'offer_price' => 'required|numeric|min:0',
+    //     ]);
+
+    //     $serviceRequest = ServiceRequest::find($request->request_id);
+    //     if (!$serviceRequest) {
+    //         return redirect()->back()->withErrors(['error' => 'Service request not found.']);
+    //     }
+
+    //     if ($serviceRequest->status == "menunggu") {
+    //         $serviceRequest->accepted_price = $request->offer_price;
+    //         $serviceRequest->status = 'menunggu'; // Update status to 'diproses'
+    //         $serviceRequest->save();
+
+    //         return redirect()->back()->with('success', 'Price offer submitted successfully.');
+    //     } else {
+    //         return redirect()->back()->with('gagal', 'sesi penawaran telah berakir');
+    //     }
+    // }
+
+    /**
+     * Form buat menerima tawaran harga dari teknisi
+     */
+    public function acceptPrice(Request $request, $id)
     {
-        $request->validate([
-            'request_id' => 'required|exists:service_requests,id',
-            'offer_price' => 'required|numeric|min:0',
+        // Cari service request berdasarkan ID dan user yang sedang login
+        $serviceRequest = ServiceRequest::where('id', $id)
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
+
+        // Update status
+        $serviceRequest->update([
+            'status' => 'dijadwalkan',
         ]);
 
-        $serviceRequest = ServiceRequest::find($request->request_id);
-        if (!$serviceRequest) {
-            return redirect()->back()->withErrors(['error' => 'Service request not found.']);
-        }
-
-        if ($serviceRequest->status == "menunggu") {
-            $serviceRequest->accepted_price = $request->offer_price;
-            $serviceRequest->status = 'menunggu'; // Update status to 'diproses'
-            $serviceRequest->save();
-
-            return redirect()->back()->with('success', 'Price offer submitted successfully.');
-        } else {
-            return redirect()->back()->with('gagal', 'sesi penawaran telah berakir');
-        }
+        return redirect()
+            ->back()
+            ->with('success', 'Penawaran berhasil diterima dan dijadwalkan.');
     }
 
+    /**
+     * Form buat menolak tawaran harga dari teknisi
+     */
+    public function rejectPrice(Request $request, $id)
+    {
+        // Cari service request berdasarkan ID dan user yang sedang login
+        $serviceRequest = ServiceRequest::where('id', $id)
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
+
+        // Update status
+        $serviceRequest->update([
+            'status' => 'menunggu',
+            'accepted_price' => null
+        ]);
+
+        return redirect()
+            ->back()
+            ->with('fail', 'Penawaran harga berhasil ditolak');
+    }
+
+    /**
+     * Menampilkan service secara detail
+     */
     public function show(Request $request)
     {
         $request = ServiceRequest::findorFail($request->id);
@@ -70,7 +115,7 @@ class ServiceRequestController extends Controller
             'category'      => 'required|string|max:255',
             'title'         => 'required|string|max:255',
             'description'   => 'required|string',
-            'scheduled_for' => 'required|date|after_or_equal:now',
+            'scheduled_for' => 'required|date',
         ]);
 
         // slug kategori
@@ -91,7 +136,7 @@ class ServiceRequestController extends Controller
         // Simpan request
         ServiceRequest::create([
             'user_id'       => $request->user()->id,
-            'technician_id' => 36,
+            'technician_id' => 1,
             // 'technician_id' => $technician->technician_id, // FK ke users
             'title'         => $validated['title'],
             'category'      => $slugCategory,

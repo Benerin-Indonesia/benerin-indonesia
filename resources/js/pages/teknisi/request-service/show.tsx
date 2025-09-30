@@ -21,8 +21,58 @@ export default function Show() {
 
     // State dummy untuk chat
     const [messages, setMessages] = useState([
-        { id: 1, from: "user", text: "Halo teknisi, bisa datang jam 10?" },
-        { id: 2, from: "teknisi", text: "Bisa kak, saya otw ya." },
+
+        {
+            id: 1,
+            from: "user",
+            text: "Selamat malam, Pak. Mau tanya, apa bisa perbaiki mesin cuci?"
+        },
+        {
+            id: 2,
+            from: "teknisi",
+            text: "Selamat malam. Bisa, Bu. Boleh dijelaskan kerusakannya seperti apa ya?"
+        },
+        {
+            id: 3,
+            from: "user",
+            text: "Ini mesin cuci saya bagian pengeringnya tidak mau berputar, Pak. Hanya mengeluarkan suara mendengung saja."
+        },
+        {
+            id: 4,
+            from: "teknisi",
+            text: "Baik. Kemungkinan itu ada masalah di kapasitor atau dinamo pengeringnya. Ibu lokasinya di mana ya? Biar saya bisa jadwalkan pengecekan."
+        },
+        {
+            id: 5,
+            from: "user",
+            text: "Saya di daerah Laweyan, Pak. Tepatnya di Jl. Rajawali No. 40. Kira-kira kapan ya bisa datang?"
+        },
+        {
+            id: 6,
+            from: "teknisi",
+            text: "Kebetulan besok pagi saya ada jadwal di dekat situ. Bagaimana kalau sekitar jam 10 pagi saya ke lokasi Ibu?"
+        },
+        {
+            id: 7,
+            from: "user",
+            text: "Boleh, Pak. Besok jam 10 pagi saya ada di rumah. Untuk biaya pengecekannya berapa ya?"
+        },
+        {
+            id: 8,
+            from: "teknisi",
+            text: "Untuk biaya pengecekan saja 75 ribu ya, Bu. Nanti kalau ada pergantian spare part, biayanya akan saya informasikan dulu sebelum pengerjaan."
+        },
+        {
+            id: 9,
+            from: "user",
+            text: "Oke, setuju, Pak. Saya tunggu besok ya."
+        },
+        {
+            id: 10,
+            from: "teknisi",
+            text: "Baik, Bu. Sampai bertemu besok."
+        }
+
     ]);
 
     // Handle Submit
@@ -103,7 +153,7 @@ export default function Show() {
                 {/* Layout 2 kolom */}
                 <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Detail Permintaan */}
-                    <div className="flex flex-col h-full col-span-2 bg-white border rounded-lg shadow-sm px-6 py-8 sm:px-12">
+                    <div className="flex flex-col col-span-2 bg-white border h-[50%] rounded-lg shadow-sm px-6 py-8 sm:px-12">
                         <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
                             <div>
                                 <dt className="text-sm font-medium text-gray-500">
@@ -144,56 +194,98 @@ export default function Show() {
                             </div>
 
                             <div>
-                                <dt className="text-sm font-medium text-gray-500">
-                                    Status
-                                </dt>
+                                <dt className="text-sm font-medium text-gray-500">Status</dt>
                                 <dd className="mt-1">
-                                    <span className="inline-flex items-center rounded-lg bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-700">
-                                        {request.status || "Menunggu"}
+                                    <span
+                                        className={`inline-flex items-center rounded-lg px-3 py-1 text-sm font-semibold ${request.status === "selesai"
+                                            ? "bg-green-100 text-green-700"
+                                            : request.status === "diproses"
+                                                ? "bg-blue-100 text-blue-700"
+                                                : request.status === "dijadwalkan"
+                                                    ? "bg-orange-100 text-orange-700"
+                                                    : request.status === "dibatalkan"
+                                                        ? "bg-gray-200 text-gray-600"
+                                                        : "bg-gray-100 text-gray-700"
+                                            }`}
+                                    >
+                                        {request.status === "dijadwalkan"
+                                            ? "Menunggu pembayaran pelanggan"
+                                            : request.status === "menunggu" &&
+                                                request.accepted_price !== null &&
+                                                request.accepted_price !== 0
+                                                ? "Menunggu persetujuan harga pelanggan" : request.status || "Menunggu"}
                                     </span>
                                 </dd>
                             </div>
 
                             <div>
                                 <dt className="text-sm font-medium text-gray-500">
-                                    Harga
+                                    {!request.accepted_price ? "Tentukan Harga" : request.status === "selesai" ? "Lunas" : request.status === "dijadwalkan" ? "Harga" : "Harga"}
                                 </dt>
                                 <dd className="mt-1">
-                                    <span className={`inline-flex items-center rounded-lg px-3 py-1 text-sm font-semibold ${request.accepted_price
-                                        ? "bg-green-100 text-green-700" // 
-                                        : "bg-orange-100 text-orange-700" //
-                                        }`}>
+                                    <span
+                                        className={`inline-flex items-center rounded-lg px-3 py-1 text-sm font-semibold ${request.accepted_price
+                                            ? "bg-green-100 text-green-700"
+                                            : "bg-orange-100 text-orange-700"
+                                            }`}
+                                    >
                                         {formatRupiah(request.accepted_price)}
                                     </span>
                                 </dd>
                             </div>
                         </dl>
 
-                        {/* Tombol aksi */}
-                        <div className="mt-auto flex gap-3 pt-6">
-                            {/* Tombol buka modal */}
-                            <button
-                                onClick={() => setShowModal(true)}
-                                className="inline-flex items-center cursor-pointer gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md"
-                                style={{ backgroundColor: PRIMARY }}
-                            >
-                                <i className="fas fa-paper-plane" /> Buat Penawaran Harga
-                            </button>
+                        {/* Kondisi tombol untuk teknisi */}
+                        <div className="flex gap-3 pt-6">
+                            {/* 1. Status menunggu + harga kosong */}
+                            {request.status === "menunggu" && (request.accepted_price === null || request.accepted_price === 0) && (
+                                <button
+                                    onClick={() => setShowModal(true)}
+                                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md"
+                                    style={{ backgroundColor: PRIMARY }}
+                                >
+                                    <i className="fas fa-paper-plane" />
+                                    Buat Penawaran Harga
+                                </button>
+                            )}
 
-                            {/* Tombol Batalkan */}
-                            {/* <Link
-                                href={`/teknisi/penawaran/tolak?request=${request.id}`}
-                                className="inline-flex items-center justify-center rounded-xl border border-transparent bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
-                            >
-                                <i className="fas fa-times mr-2"></i>
-                                Tolak Permintaan
-                            </Link> */}
+                            {/* 2. Status menunggu + harga sudah ada */}
+                            {request.status === "menunggu" && request.accepted_price !== null && request.accepted_price !== 0 && (
+                                <button
+                                    disabled
+                                    className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold bg-gray-300 text-gray-600 cursor-not-allowed shadow-sm"
+                                >
+                                    <i className="fas fa-paper-plane" />
+                                    Buat Penawaran Harga
+                                </button>
+                            )}
+
+                            {/* 3. Status dijadwalkan */}
+                            {/* {request.status === "dijadwalkan" && (
+                                <button
+                                    disabled
+                                    className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold bg-gray-300 text-gray-600 cursor-not-allowed shadow-sm"
+                                >
+                                    <i className="fas fa-play-circle" />
+                                    Mulai Kerjakan
+                                </button>
+                            )} */}
+
+                            {/* {request.status === "diproses" && (
+                                <button
+                                    className="inline-flex items-center gap-1.5 rounded-md px-4 py-2.5 text-sm font-semibold bg-green-700 text-white cursor-not-allowed shadow-sm"
+                                >
+                                    <i className="fas fa-play-circle" />
+                                    Mulai Kerjakan
+                                </button>
+                            )} */}
                         </div>
+
                     </div>
 
                     {/* Panel Samping (Chat) */}
-                    <div className="col-span-1 border rounded-lg overflow-hidden flex flex-col gap-6">
-                        <div className="bg-white rounded-lg shadow-sm p-4 flex flex-col h-auto lg:h-full">
+                    <div className="col-span-1 border rounded-lg overflow-hidden flex flex-col h-[50%] gap-6">
+                        <div className="bg-white rounded-lg shadow-sm p-4 flex flex-col h-[100%]">
                             <h2 className="text-base font-semibold text-gray-800 mb-3">
                                 💬 Chat dengan Pelanggan
                             </h2>
@@ -230,7 +322,7 @@ export default function Show() {
                                 />
                                 <button
                                     type="submit"
-                                    className="rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm"
+                                    className="cursor-pointer rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm"
                                     style={{ backgroundColor: PRIMARY }}
                                 >
                                     ➤
