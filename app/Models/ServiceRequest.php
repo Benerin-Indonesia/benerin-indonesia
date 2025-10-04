@@ -27,6 +27,7 @@ class ServiceRequest extends Model
     protected $fillable = [
         'user_id',
         'technician_id',
+        'title',
         'category',
         'description',
         'scheduled_for',

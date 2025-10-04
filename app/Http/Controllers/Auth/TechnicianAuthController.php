@@ -35,7 +35,7 @@ class TechnicianAuthController extends Controller
         }
 
         $request->session()->regenerate();
-        return redirect()->intended('/teknisi/dashboard'); // ubah sesuai rute dashboard teknisi
+        return redirect()->intended('/teknisi/home'); // ubah sesuai rute dashboard teknisi
     }
 
     public function showRegisterForm()
@@ -61,7 +61,7 @@ class TechnicianAuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->intended('/teknisi/dashboard');
+        return redirect()->intended('/teknisi/home');
     }
 
     public function logout(Request $request)
