@@ -4,6 +4,7 @@ namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\Payment;
 use App\Models\ServiceRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -50,7 +51,8 @@ class userController extends Controller
                         ? \Carbon\Carbon::parse($req->scheduled_for)->toDateTimeString()
                         : null,
                     'status' => $req->status, // pastikan value sesuai union type di TS
-                    'price_offer' => $req->price_offer ?? null,
+                    // 'price_offer' => $req->price_offer ?? null,
+                    'price_offer' => Payment::where('service_request_id', $req->id)->value('amount') ?? null,
                 ];
             });
         // dd($request_items);

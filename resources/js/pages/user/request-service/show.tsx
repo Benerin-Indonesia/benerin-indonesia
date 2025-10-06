@@ -1,12 +1,13 @@
 import React, { useState, useEffect, PropsWithChildren, useRef } from "react";
-import { Head, Link, usePage, useForm } from "@inertiajs/react";
+import { Head, Link, usePage, useForm, router } from "@inertiajs/react";
+import axios from 'axios';
 
 // --- PALET WARNA & TIPE KONSISTEN ---
 const PRIMARY = "#206BB0";
 const SECONDARY = "#FFBD59";
 
 // --- TIPE DATA ---
-type AuthUser = { name: string; email: string; };
+type AuthUser = { id: number; name: string; email: string; };
 type RequestStatus = "menunggu" | "diproses" | "dijadwalkan" | "selesai" | "dibatalkan";
 const STATUS_STEPS: RequestStatus[] = ["menunggu", "diproses", "dijadwalkan", "selesai"];
 
@@ -26,6 +27,19 @@ type PageProps = {
     request: ServiceRequest;
     paymentStatus: "pending" | "settled" | "failure" | "refunded" | "cancelled" | false;
     needsPaymentAction: boolean;
+    initialMessages: ChatMessage[];
+    requestPhotoPath: string;
+};
+
+type ChatMessage = {
+    id: number;
+    sender_id: number; // Sesuai migrasi
+    body: string;      // Sesuai migrasi
+    sender: {          // Relasi 'sender'
+        id: number;
+        name: string;
+    };
+    created_at: string;
 };
 
 // --- FUNGSI HELPER ---
@@ -46,18 +60,20 @@ function formatDate(dateString: string | null) {
     });
 }
 
-// --- KOMPONEN: AppLayout ---
+// --- NEW COMPONENT: Application Layout with Responsive Navbar ---
 function AppLayout({ user, children }: PropsWithChildren<{ user: AuthUser | null }>) {
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
     const initial = user?.name.charAt(0).toUpperCase() ?? 'U';
 
     return (
         <div className="min-h-screen bg-gray-50/50">
-            <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/80 shadow-sm backdrop-blur-lg">
+            {/* --- TOP NAVIGATION BAR (For Desktop & Mobile) --- */}
+            <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-lg shadow-sm border-b border-gray-200/80">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <div className="flex h-16 items-center justify-between">
+                        {/* Logo / Brand Name */}
                         <div className="flex-shrink-0">
-                            <Link href="/user/home" className="flex items-center gap-2 text-xl font-bold" style={{ color: PRIMARY }}>
+                            <Link href="/" className="flex items-center gap-2 text-xl font-bold" style={{ color: PRIMARY }}>
                                 <img
                                     src="/storage/assets/logo.png"
                                     alt="Benerin Indonesia"
@@ -65,18 +81,22 @@ function AppLayout({ user, children }: PropsWithChildren<{ user: AuthUser | null
                                 />
                             </Link>
                         </div>
+
+                        {/* Desktop Navigation Links */}
                         <nav className="hidden md:flex md:items-center md:gap-x-8">
                             <Link href="/user/home" className="flex items-center gap-2 text-sm font-semibold transition" style={{ color: PRIMARY }}>
                                 <i className="fas fa-home" /> Beranda
                             </Link>
-                            <Link href="/user/permintaan" className="flex items-center gap-2 text-sm font-semibold text-gray-600 transition hover:text-gray-900">
+                            <Link href="/user/permintaan" className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition">
                                 <i className="fas fa-clipboard-list" /> Permintaan
                             </Link>
                         </nav>
+
+                        {/* Profile Menu Dropdown */}
                         <div className="relative">
                             <button
                                 onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                                onBlur={() => setTimeout(() => setIsProfileMenuOpen(false), 150)}
+                                onBlur={() => setTimeout(() => setIsProfileMenuOpen(false), 150)} // Close on blur
                                 className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2"
                                 style={{ '--tw-ring-color': PRIMARY } as React.CSSProperties}
                             >
@@ -84,15 +104,16 @@ function AppLayout({ user, children }: PropsWithChildren<{ user: AuthUser | null
                             </button>
                             {isProfileMenuOpen && (
                                 <div className="absolute right-0 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                                    <div className="border-b px-4 py-2">
-                                        <p className="truncate text-sm font-semibold text-gray-900">{user?.name}</p>
-                                        <p className="truncate text-xs text-gray-500">{user?.email}</p>
+                                    <div className="px-4 py-2 border-b">
+                                        <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
+                                        <p className="text-xs text-gray-500 truncate">{user?.email}</p>
                                     </div>
-                                    <Link href="/profile" className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100">
-                                        <i className="fas fa-user-edit mr-1 w-6"></i> Profil Saya
+                                    <Link href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left">
+                                        <i className="fas fa-user-edit w-6 mr-1"></i> Profil Saya
                                     </Link>
-                                    <Link href="/logout" method="post" as="button" className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50">
-                                        <i className="fas fa-sign-out-alt mr-1 w-6"></i> Keluar
+                                    <Link href="/user/wallet" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i className="fas fa-wallet w-6 mr-1"></i> Wallet & Saldo</Link>
+                                    <Link href="/logout" method="post" as="button" className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                                        <i className="fas fa-sign-out-alt w-6 mr-1"></i> Keluar
                                     </Link>
                                 </div>
                             )}
@@ -100,9 +121,13 @@ function AppLayout({ user, children }: PropsWithChildren<{ user: AuthUser | null
                     </div>
                 </div>
             </header>
+
+            {/* Main Content Area */}
             <main>{children}</main>
-            <footer className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200 bg-white shadow-t-lg md:hidden">
-                <nav className="grid h-16 grid-cols-3">
+
+            {/* --- BOTTOM NAVIGATION BAR (Mobile Only) --- */}
+            <footer className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-t-lg z-30">
+                <nav className="grid grid-cols-3 h-16">
                     <Link href="/user/home" className="flex flex-col items-center justify-center gap-1 text-xs font-medium" style={{ color: PRIMARY }}>
                         <i className="fas fa-home text-xl"></i>
                         <span>Beranda</span>
@@ -117,6 +142,8 @@ function AppLayout({ user, children }: PropsWithChildren<{ user: AuthUser | null
                     </Link>
                 </nav>
             </footer>
+
+            {/* Spacer to prevent content from being hidden behind the bottom nav */}
             <div className="h-16 md:hidden"></div>
         </div>
     );
@@ -173,22 +200,43 @@ function StatusTimeline({ currentStatus }: { currentStatus: RequestStatus }) {
 // --- KOMPONEN UTAMA: Show ---
 export default function Show() {
     const { props } = usePage<PageProps>();
-    const { auth, request, paymentStatus, needsPaymentAction } = props;
+    const { auth, request, paymentStatus, needsPaymentAction, initialMessages, requestPhotoPath } = props;
+    const [shouldScroll, setShouldScroll] = useState(false);
 
-    const [newMessage, setNewMessage] = useState("");
-    const [messages, setMessages] = useState([
-        { id: 1, from: "user", text: `Halo, saya butuh perbaikan untuk ${request.title}.` },
-        { id: 2, from: "teknisi", text: "Baik kak, akan segera kami cek dan berikan penawaran terbaik." },
-    ]);
     const [actionType, setActionType] = useState<"accept" | "reject" | null>(null);
     const [showConfirmEndServiceModal, setShowConfirmEndServiceModal] = useState(false); // <-- State baru untuk modal
+    const [isModalOpen, setIsModalOpen] = useState(false); // state open popup foto
+
+    // --- STATE & LOGIKA CHAT ---
     const chatContainerRef = useRef<HTMLDivElement>(null);
+    const [newMessage, setNewMessage] = useState("");
+    const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+    // use effect new chat
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.reload({
+                only: ["initialMessages"],
+                onSuccess: (page) => {
+                    const newMessages = (page.props as any).initialMessages;
+
+                    // Jika jumlah pesan bertambah → scroll ke bawah
+                    if (newMessages.length > messages.length) {
+                        setShouldScroll(true);
+                    }
+
+                    setMessages(newMessages);
+                },
+            });
+        }, 2000);
+
+        return () => clearInterval(interval);
+    }, [messages]); // <--- penting: tambahkan dependency messages
+
 
     // Form Inertia untuk berbagai aksi
     const { post, processing } = useForm({
         id: request.id,
     });
-
     // Handler untuk form pembayaran
     const handlePayment = (e: React.FormEvent) => {
         e.preventDefault();
@@ -203,26 +251,29 @@ export default function Show() {
     };
 
     // Handler untuk refund
+    // dev
+    // Scroll otomatis ke bawah saat pertama kali halaman dimuat
     const handleRefund = (e: React.MouseEvent) => {
         e.preventDefault();
         if (confirm('Apakah Anda yakin ingin mengajukan refund untuk layanan ini?')) {
             post(`/permintaan/${request.id}/refund`);
         }
     };
-
+    // Use effect ketika ada pesan baru container kebawah
     useEffect(() => {
         if (chatContainerRef.current) {
             const container = chatContainerRef.current;
             container.scrollTop = container.scrollHeight;
         }
-    }, [messages]);
+    }, []);
 
-    const handleSend = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newMessage.trim()) return;
-        setMessages([...messages, { id: messages.length + 1, from: "user", text: newMessage }]);
-        setNewMessage("");
-    };
+    useEffect(() => {
+        if (chatContainerRef.current && shouldScroll) {
+            const container = chatContainerRef.current;
+            container.scrollTop = container.scrollHeight;
+            setShouldScroll(false);
+        }
+    }, [messages, shouldScroll]);
 
     const handleConfirm = () => {
         if (!actionType) return;
@@ -267,6 +318,41 @@ export default function Show() {
     };
 
     const effectiveStatus = getEffectiveStatus();
+
+    // Fitur Chat
+    // Fitur Chat
+    const [isSending, setIsSending] = useState(false); // Tambahkan state untuk loading
+    const handleSendChat = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newMessage.trim() || isSending) return;
+
+        const messageToSend = newMessage;
+
+        const optimisticMessage: ChatMessage = {
+            id: crypto.randomUUID() as any,
+            sender_id: auth.user.id,
+            body: messageToSend,
+            sender: auth.user,
+            created_at: new Date().toISOString(),
+        };
+
+        setMessages(prev => [...prev, optimisticMessage]);
+        setNewMessage("");
+        setIsSending(true);
+        setShouldScroll(true); // 🟢 aktifkan scroll hanya ketika user kirim pesan
+
+        try {
+            await axios.post(`/user/chat/request/${request.id}`, {
+                body: messageToSend,
+            });
+        } catch (error) {
+            console.error("Gagal mengirim pesan:", error);
+            setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id));
+            setNewMessage(messageToSend);
+        } finally {
+            setIsSending(false);
+        }
+    };
 
     return (
         <AppLayout user={auth.user}>
@@ -315,17 +401,40 @@ export default function Show() {
 
                         {/* --- KONDISI 2: Teknisi Sudah Memberi Penawaran, Menunggu Persetujuan Anda --- */}
                         {request.status === "menunggu" && request.accepted_price && (
-                            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center shadow-sm">
-                                <h2 className="text-lg font-semibold text-amber-900">Penawaran Telah Diberikan!</h2>
-                                <p className="mt-1 text-sm text-amber-800">Silakan terima penawaran untuk melanjutkan ke tahap penjadwalan.</p>
-                                <div className="my-4 text-4xl font-bold text-gray-900">{formatRupiah(request.accepted_price)}</div>
-                                <div className="flex flex-wrap justify-center gap-3">
-                                    <button onClick={() => setActionType("accept")} className="cursor-pointer inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700">
-                                        <i className="fas fa-check-circle" /> Terima & Lanjutkan
-                                    </button>
-                                    <button onClick={() => setActionType("reject")} className="cursor-pointer inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50">
-                                        Tolak Penawaran
-                                    </button>
+                            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-cyan-50 to-blue-100 p-6 shadow-lg shadow-blue-500/10 sm:p-8">
+                                {/* Decorative background element */}
+                                <i className="fas fa-star absolute -right-8 -top-8 text-9xl text-white/50 opacity-80"></i>
+
+                                <div className="relative z-10 flex flex-col items-center gap-6 md:flex-row md:items-start md:justify-between">
+                                    {/* --- Informasi Penawaran --- */}
+                                    <div className="flex flex-col items-center text-center md:items-start md:text-left">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-md">
+                                            <i className="fas fa-gift text-xl"></i>
+                                        </div>
+                                        <h2 className="mt-4 text-xl font-bold text-slate-800">Penawaran Spesial Untuk Anda!</h2>
+                                        <p className="mt-1 max-w-md text-sm text-slate-600">Satu langkah lagi untuk memulai pekerjaan. Silakan tinjau penawaran harga di bawah ini.</p>
+                                        <div className="mt-5">
+                                            <p className="text-sm font-medium text-slate-500">Hanya</p>
+                                            <p className="text-4xl font-bold tracking-tight text-[#206BB0] sm:text-5xl">{formatRupiah(request.accepted_price)}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* --- Tombol Aksi --- */}
+                                    <div className="flex w-full shrink-0 flex-col gap-3 sm:w-auto md:mt-4">
+                                        <button
+                                            onClick={() => setActionType("accept")}
+                                            className="cursor-pointer group inline-flex w-full items-center justify-center gap-3 rounded-xl bg-green-500 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-green-500/20 transition-all duration-300 ease-in-out hover:bg-green-600 hover:shadow-xl hover:-translate-y-1"
+                                        >
+                                            <i className="fas fa-check-circle transition-transform duration-300 group-hover:rotate-12"></i>
+                                            <span>Ya, Saya Terima</span>
+                                        </button>
+                                        <button
+                                            onClick={() => setActionType("reject")}
+                                            className="cursor-pointer w-full rounded-xl px-6 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-red-500/10 hover:text-red-700"
+                                        >
+                                            Tolak Penawaran
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -408,6 +517,7 @@ export default function Show() {
                             </div>
                         )}
 
+                        {/* --- KONDISI 5 (PERBAIKAN STYLE): Service request Selesai --- */}
                         {request.status === "selesai" && request.accepted_price && (
                             <div className="rounded-2xl p-6 text-center shadow-lg" style={{ background: `linear-gradient(135deg, #10B981, #059669)` }}>
                                 <div className="grid h-14 w-14 mx-auto place-items-center rounded-full bg-white/30 backdrop-blur-sm">
@@ -426,7 +536,7 @@ export default function Show() {
                             </div>
                         )}
 
-                        {/* --- KARTU BARU: MENAMPILKAN STATUS SAAT PERMINTAAN DIBATALKAN --- */}
+                        {/* --- KONDISI 6 (PERBAIKAN STYLE): Service request gagal dan di batalkan --- */}
                         {request.status === "dibatalkan" && (
                             <div className="rounded-2xl border-2 border-dashed border-gray-300 bg-gray-100 p-6 text-center shadow-sm">
                                 <div className="grid h-12 w-12 mx-auto place-items-center rounded-full bg-gray-200">
@@ -454,27 +564,73 @@ export default function Show() {
                             </div>
                         )}
 
+                        {/* Meta data service*/}
                         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                             <h2 className="text-base font-semibold text-gray-900">Rincian Permintaan</h2>
                             <dl className="mt-4 divide-y divide-gray-100">
                                 <div className="py-4 grid grid-cols-1 sm:grid-cols-3 sm:gap-4">
                                     <dt className="text-sm text-gray-500">Kategori</dt>
-                                    <dd className="mt-1 text-sm font-medium text-gray-800 sm:col-span-2 sm:mt-0">{request.category}</dd>
+                                    <dd className="mt-1 text-sm font-medium text-gray-800 sm:col-span-2 sm:mt-0">
+                                        {request.category}
+                                    </dd>
                                 </div>
                                 <div className="py-4 grid grid-cols-1 sm:grid-cols-3 sm:gap-4">
                                     <dt className="text-sm text-gray-500">Jadwal Diinginkan</dt>
-                                    <dd className="mt-1 text-sm font-medium text-gray-800 sm:col-span-2 sm:mt-0">{formatDate(request.scheduled_for)}</dd>
+                                    <dd className="mt-1 text-sm font-medium text-gray-800 sm:col-span-2 sm:mt-0">
+                                        {formatDate(request.scheduled_for)}
+                                    </dd>
                                 </div>
                                 <div className="pt-4 grid grid-cols-1 sm:grid-cols-3 sm:gap-4">
                                     <dt className="text-sm text-gray-500">Deskripsi Masalah</dt>
-                                    <dd className="mt-1 text-sm font-medium text-gray-800 sm:col-span-2 sm:mt-0 whitespace-pre-wrap">{request.description}</dd>
+                                    <dd className="mt-1 text-sm font-medium text-gray-800 sm:col-span-2 sm:mt-0 whitespace-pre-wrap">
+                                        {request.description}
+                                    </dd>
                                 </div>
                             </dl>
+
+                            {/* === FOTO PERMINTAAN === */}
+                            <div className="mt-6">
+                                <h3 className="text-sm font-semibold text-gray-900">Foto Permintaan</h3>
+
+                                {/* Cek dan tampilkan thumbnail gambar */}
+                                {requestPhotoPath ? (
+                                    <div className="mt-3">
+                                        <div
+                                            // Tambahkan onClick untuk membuka modal
+                                            onClick={() => setIsModalOpen(true)}
+                                            className="group relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-gray-50 transition hover:shadow-md"
+                                        >
+                                            <img
+                                                src={`/storage/${requestPhotoPath}`}
+                                                alt="Foto Permintaan"
+                                                className="h-48 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                onError={(e) => {
+                                                    (e.currentTarget as HTMLImageElement).src =
+                                                        "https://via.placeholder.com/150/eeeeee/777777?text=Gagal+Muat";
+                                                }}
+                                            />
+                                            {/* Ikon untuk memperjelas bisa di-klik */}
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100">
+                                                <i className="fas fa-expand text-2xl text-white"></i>
+                                            </div>
+                                        </div>
+                                        <p className="mt-3 text-sm text-gray-500 italic">
+                                            Tap gambar untuk zoom
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <p className="mt-3 text-sm text-gray-500 italic">
+                                        Tidak ada foto yang diunggah untuk permintaan ini.
+                                    </p>
+                                )}
+                            </div>
                         </div>
+
                     </div>
 
-                    <div id="section-chat-user" className="lg:col-span-1 rounded-2xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden h-[70vh]">
-                        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+                    {/* Section chat */}
+                    <div id="section-chat-user" className="lg:col-span-1 rounded-2xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden h-[73vh] md:h-[60vh]">
+                        <div className="p-4 border-b border-gray-200 flex items-center gap-3">
                             <img src={`https://ui-avatars.com/api/?name=Teknisi&background=random`} alt={'Teknisi'} className="h-10 w-10 rounded-full" />
                             <div>
                                 <h2 className="text-sm font-semibold text-gray-900">Diskusi dengan Teknisi</h2>
@@ -483,18 +639,19 @@ export default function Show() {
 
                         <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
                             {messages.map((msg) => (
-                                <div key={msg.id} className={`flex items-end gap-2 ${msg.from === "user" ? "justify-end" : "justify-start"}`}>
+                                <div key={msg.id} className={`flex items-end gap-2 ${msg.sender.id === auth.user.id ? "justify-end" : "justify-start"}`}>
                                     <div
-                                        className={`max-w-[80%] rounded-t-xl px-3 py-2 text-sm ${msg.from === "user" ? "rounded-l-xl text-white" : "rounded-r-xl bg-gray-100 text-gray-800"}`}
-                                        style={msg.from === 'user' ? { backgroundColor: PRIMARY } : {}}
+                                        // KONTEN PESAN DIAMBIL DARI 'msg.body'
+                                        className={`max-w-[80%] rounded-t-xl px-3 py-2 text-sm ${msg.sender.id === auth.user.id ? "rounded-l-xl text-white" : "rounded-r-xl bg-gray-100 border text-gray-800"}`}
+                                        style={msg.sender.id === auth.user.id ? { backgroundColor: PRIMARY } : {}}
                                     >
-                                        {msg.text}
+                                        {msg.body}
                                     </div>
                                 </div>
                             ))}
                         </div>
 
-                        <form onSubmit={handleSend} className="p-3 border-t border-gray-100 bg-white flex items-center gap-2">
+                        <form onSubmit={handleSendChat} className="p-3 border-t border-gray-200 bg-white flex items-center gap-2">
                             <input
                                 type="text"
                                 value={newMessage}
@@ -502,15 +659,18 @@ export default function Show() {
                                 className="flex-1 rounded-lg border bg-gray-50 px-3 py-2 text-sm focus:border-transparent focus:ring-2 w-full"
                                 placeholder="Tulis balasan..."
                                 style={{ '--tw-ring-color': SECONDARY } as React.CSSProperties}
+                                disabled={isSending} // Nonaktifkan input saat mengirim
                             />
-                            <button type="submit" className="flex-shrink-0 grid h-9 w-9 place-items-center rounded-lg text-white shadow-sm transition" style={{ backgroundColor: PRIMARY }}>
-                                <i className="fas fa-paper-plane fa-sm"></i>
+                            <button type="submit" className="cursor-pointer flex-shrink-0 grid h-9 w-9 place-items-center rounded-lg text-white shadow-sm transition" style={{ backgroundColor: PRIMARY }} disabled={isSending}>
+                                {/* Tambahkan ikon loading */}
+                                {isSending ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-paper-plane fa-sm"></i>}
                             </button>
                         </form>
                     </div>
                 </div>
             </div>
 
+            {/* Modal Penawaran */}
             {actionType && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-lg" onClick={() => setActionType(null)}>
                     <div className="bg-white rounded-2xl shadow-lg w-full max-w-md m-4 overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -580,6 +740,36 @@ export default function Show() {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* === Kode untuk Popup/Modal Gambar === */}
+            {isModalOpen && (
+                <div
+                    // Backdrop (latar belakang gelap)
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+                    onClick={() => setIsModalOpen(false)}
+                >
+                    <div
+                        // Container untuk gambar, mencegah modal tertutup saat gambar di-klik
+                        className="relative"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Tombol Close */}
+                        <button
+                            onClick={() => setIsModalOpen(false)}
+                            className="absolute -top-4 -right-4 flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-800 shadow-lg transition hover:scale-110"
+                        >
+                            <i className="fas fa-times"></i>
+                        </button>
+
+                        {/* Gambar dalam ukuran besar */}
+                        <img
+                            src={`/storage/${requestPhotoPath}`}
+                            alt="Foto Permintaan (Ukuran Penuh)"
+                            className="max-h-[90vh] max-w-[90vw] rounded-lg"
+                        />
                     </div>
                 </div>
             )}

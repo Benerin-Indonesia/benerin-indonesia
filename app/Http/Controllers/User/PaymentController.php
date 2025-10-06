@@ -161,7 +161,8 @@ class PaymentController extends Controller
             default => Log::info("Webhook status {$notification->transaction_status} tidak ditangani."),
         };
 
-        return response()->json(['message' => 'Webhook berhasil.'], 200);
+        // return response()->json(['message' => 'Webhook berhasil.'], 200);
+        return redirect()->back()->with('success', 'Price offer submitted successfully.');
     }
 
 

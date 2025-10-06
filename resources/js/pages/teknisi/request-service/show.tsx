@@ -1,12 +1,13 @@
 import React, { useState, useEffect, PropsWithChildren, useRef } from "react";
-import { Head, Link, usePage, useForm } from "@inertiajs/react";
+import { Head, Link, usePage, useForm, router } from "@inertiajs/react";
+import axios from "axios";
 
 // --- PALET WARNA & TIPE KONSISTEN ---
 const PRIMARY = "#206BB0";
 const SECONDARY = "#FFBD59";
 
 // --- TIPE DATA ---
-type AuthUser = { name:string; email:string; };
+type AuthUser = { name: string; email: string; };
 type RequestStatus = "menunggu" | "diproses" | "dijadwalkan" | "selesai" | "dibatalkan";
 const STATUS_STEPS: RequestStatus[] = ["menunggu", "diproses", "dijadwalkan", "selesai"];
 
@@ -26,6 +27,20 @@ type PageProps = {
     request: ServiceRequest;
     paymentStatus: "pending" | "settled" | "failure" | "refunded" | "cancelled" | false;
     needsPaymentAction: boolean;
+    initialMessages: ChatMessage[];
+    requestPhotoPath: string;
+};
+
+// --- TIPE DATA BARU UNTUK CHAT ---
+type ChatMessage = {
+    id: number;
+    sender_id: number; // Sesuai migrasi
+    body: string;      // Sesuai migrasi
+    sender: {          // Relasi 'sender'
+        id: number;
+        name: string;
+    };
+    created_at: string;
 };
 
 
@@ -148,32 +163,60 @@ function StatusTimeline({ currentStatus }: { currentStatus: RequestStatus }) {
 // --- KOMPONEN UTAMA: Show (Versi Teknisi) ---
 export default function Show() {
     const { props } = usePage<PageProps>();
-    const { auth, request, needsPaymentAction } = props;
+    const { auth, request, needsPaymentAction, initialMessages, requestPhotoPath } = props;
+    const [shouldScroll, setShouldScroll] = useState(false);
 
-    // State dan form
-    const [newMessage, setNewMessage] = useState("");
-    const [messages, setMessages] = useState([
-        { id: 1, from: "user", text: `Halo, saya butuh perbaikan untuk ${request.title}.` },
-        { id: 2, from: "teknisi", text: "Baik kak, akan segera kami cek." },
-    ]);
     const { data, setData, post, processing, errors, reset } = useForm({
         price_offer: request.accepted_price || '',
         request_id: request.id,
     });
     const [showPriceModal, setShowPriceModal] = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false); // state open popup foto
+
+    // --- STATE & LOGIKA CHAT ---
+    const [newMessage, setNewMessage] = useState("");
+    const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
     const chatContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.reload({
+                only: ["initialMessages"],
+                onSuccess: (page) => {
+                    const newMessages = (page.props as any).initialMessages;
+
+                    // Jika jumlah pesan bertambah → scroll ke bawah
+                    if (newMessages.length > messages.length) {
+                        setShouldScroll(true);
+                    }
+
+                    setMessages(newMessages);
+                },
+            });
+        }, 2000);
+
+        return () => clearInterval(interval);
+    }, [messages]); // <--- penting: tambahkan dependency messages
+
+
+    // Use effect reload page langsung chat langsung kebawah 
+    // Scroll otomatis ke bawah saat pertama kali halaman dimuat
     useEffect(() => {
         if (chatContainerRef.current) {
             const container = chatContainerRef.current;
             container.scrollTop = container.scrollHeight;
         }
-    }, [messages]);
-    const handleSend = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newMessage.trim()) return;
-        setMessages([...messages, { id: messages.length + 1, from: "teknisi", text: newMessage }]);
-        setNewMessage("");
-    };
+    }, []);
+    // Use effect ketika ada pesan baru container kebawah
+    useEffect(() => {
+        if (chatContainerRef.current && shouldScroll) {
+            const container = chatContainerRef.current;
+            container.scrollTop = container.scrollHeight;
+            setShouldScroll(false);
+        }
+    }, [messages, shouldScroll]);
+
+
     const handleSubmitPrice = (e: React.FormEvent) => {
         e.preventDefault();
         post("/teknisi/permintaan-harga", {
@@ -184,7 +227,7 @@ export default function Show() {
         });
     };
 
-    // --- LOGIKA STATUS YANG DISEMPURNAKAN ---
+    // --- LOGIKA STATUS ---
     const getEffectiveStatus = (): RequestStatus => {
         // Jika status asli sudah 'selesai' atau 'dibatalkan', langsung gunakan itu.
         if (request.status === 'selesai' || request.status === 'dibatalkan') {
@@ -195,7 +238,7 @@ export default function Show() {
         if (request.status === 'dijadwalkan' && !needsPaymentAction) {
             return 'dijadwalkan';
         }
-        
+
         // Jika sudah ada harga (accepted_price), berarti sudah masuk tahap 'diproses'
         // Ini mencakup: penawaran dikirim, disetujui, dan menunggu pembayaran.
         if (request.accepted_price) {
@@ -207,6 +250,42 @@ export default function Show() {
     };
 
     const effectiveStatus = getEffectiveStatus();
+
+    // Fitur Chat
+    const [isSending, setIsSending] = useState(false); // Tambahkan state untuk loading
+    const handleSendChat = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newMessage.trim() || isSending) return;
+
+        const messageToSend = newMessage;
+
+        const optimisticMessage: ChatMessage = {
+            id: crypto.randomUUID() as any,
+            sender_id: auth.user.id,
+            body: messageToSend,
+            sender: auth.user,
+            created_at: new Date().toISOString(),
+        };
+
+        setMessages(prev => [...prev, optimisticMessage]);
+        setNewMessage("");
+        setIsSending(true);
+        setShouldScroll(true);
+
+        try {
+            await axios.post(`/teknisi/chat/request/${request.id}`, {
+                body: messageToSend,
+            });
+        } catch (error) {
+            console.error("Gagal mengirim pesan:", error);
+            setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id));
+            setNewMessage(messageToSend);
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+
 
     return (
         <AppLayout user={auth.user}>
@@ -304,7 +383,7 @@ export default function Show() {
                                 </div>
                             </div>
                         )}
-                        
+
                         {/* Kartu: Pekerjaan Selesai (dari sudut pandang Teknisi) */}
                         {request.status === "selesai" && (
                             <div className="rounded-2xl p-6 text-center text-white shadow-lg" style={{ background: `linear-gradient(135deg, ${PRIMARY}, #1a5a96)` }}>
@@ -358,7 +437,7 @@ export default function Show() {
                             </div>
                         )}
 
-                        {/* Rincian Permintaan & Chat */}
+                        {/* Meta data*/}
                         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                             <h2 className="text-base font-semibold text-gray-900">Informasi Klien & Permintaan</h2>
                             <dl className="divide-y divide-gray-100 mt-4">
@@ -375,28 +454,72 @@ export default function Show() {
                                     <dd className="mt-1 text-sm font-medium text-gray-800 sm:col-span-2 sm:mt-0 whitespace-pre-wrap">{request.description}</dd>
                                 </div>
                             </dl>
-                        </div>
-                    </div>
 
-                    <div id="section-chat-teknisi" className="lg:col-span-1 rounded-2xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden h-[60vh]">
-                        <div className="p-4 border-b border-gray-200 flex items-center gap-3">
-                            <img src={`https://ui-avatars.com/api/?name=${request.user?.name.replace(' ', '+') || 'User'}&background=random`} alt={request.user?.name || 'User'} className="h-10 w-10 rounded-full" />
-                            <div>
-                                <h2 className="text-sm font-semibold text-gray-900">Diskusi dengan {request.user?.name.split(' ')[0] || 'Klien'}</h2>
+                            {/* === FOTO PERMINTAAN === */}
+                            <div className="mt-6">
+                                <h3 className="text-sm font-semibold text-gray-900">Foto Permintaan</h3>
+
+                                {/* Cek dan tampilkan thumbnail gambar */}
+                                {requestPhotoPath ? (
+                                    <div className="mt-3">
+                                        <div
+                                            // Tambahkan onClick untuk membuka modal
+                                            onClick={() => setIsModalOpen(true)}
+                                            className="group relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-gray-50 transition hover:shadow-md"
+                                        >
+                                            <img
+                                                src={`/storage/${requestPhotoPath}`}
+                                                alt="Foto Permintaan"
+                                                className="h-48 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                onError={(e) => {
+                                                    (e.currentTarget as HTMLImageElement).src =
+                                                        "https://via.placeholder.com/150/eeeeee/777777?text=Gagal+Muat";
+                                                }}
+                                            />
+                                            {/* Ikon untuk memperjelas bisa di-klik */}
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100">
+                                                <i className="fas fa-expand text-2xl text-white"></i>
+                                            </div>
+                                        </div>
+                                        <p className="mt-3 text-sm text-gray-500 italic">
+                                            Tap gambar untuk zoom
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <p className="mt-3 text-sm text-gray-500 italic">
+                                        Tidak ada foto yang diunggah untuk permintaan ini.
+                                    </p>
+                                )}
                             </div>
                         </div>
+
+                    </div>
+
+                    {/* chat */}
+                    <div id="section-chat-user" className="lg:col-span-1 rounded-2xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden h-[73vh] md:h-[60vh]">
+                        <div className="p-4 border-b border-gray-200 flex items-center gap-3">
+                            <img src={`https://ui-avatars.com/api/?name=Teknisi&background=random`} alt={'Teknisi'} className="h-10 w-10 rounded-full" />
+                            <div>
+                                <h2 className="text-sm font-semibold text-gray-900">Diskusi dengan Teknisi</h2>
+                            </div>
+                        </div>
+
                         <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
                             {messages.map((msg) => (
-                                <div key={msg.id} className={`flex items-end gap-2 ${msg.from === "teknisi" ? "justify-end" : "justify-start"}`}>
-                                    <div className={`max-w-[80%] rounded-t-xl px-3 py-2 text-sm border ${msg.from === "teknisi" ? "rounded-l-xl text-white" : "rounded-r-xl bg-gray-100 text-gray-800"}`}
-                                        style={msg.from === 'teknisi' ? { backgroundColor: PRIMARY } : {}}
+                                // LOGIKA PEMILIK PESAN DIPERBAIKI
+                                <div key={msg.id} className={`flex items-end gap-2 ${msg.sender.id === auth.user.id ? "justify-end" : "justify-start"}`}>
+                                    <div
+                                        // KONTEN PESAN DIAMBIL DARI 'msg.content'
+                                        className={`max-w-[80%] rounded-t-xl px-3 py-2 text-sm ${msg.sender.id === auth.user.id ? "rounded-l-xl text-white" : "rounded-r-xl bg-gray-100 border text-gray-800"}`}
+                                        style={msg.sender.id === auth.user.id ? { backgroundColor: PRIMARY } : {}}
                                     >
-                                        {msg.text}
+                                        {msg.body}
                                     </div>
                                 </div>
                             ))}
                         </div>
-                        <form onSubmit={handleSend} className="p-3 border-t border-gray-200 bg-white flex items-center gap-2">
+
+                        <form onSubmit={handleSendChat} className="p-3 border-t border-gray-200 bg-white flex items-center gap-2">
                             <input
                                 type="text"
                                 value={newMessage}
@@ -404,9 +527,11 @@ export default function Show() {
                                 className="flex-1 rounded-lg border bg-gray-50 px-3 py-2 text-sm focus:border-transparent focus:ring-2 w-full"
                                 placeholder="Tulis balasan..."
                                 style={{ '--tw-ring-color': SECONDARY } as React.CSSProperties}
+                                disabled={isSending} // Nonaktifkan input saat mengirim
                             />
-                            <button type="submit" className="flex-shrink-0 grid h-9 w-9 place-items-center rounded-lg text-white shadow-sm transition" style={{ backgroundColor: PRIMARY }}>
-                                <i className="fas fa-paper-plane fa-sm"></i>
+                            <button type="submit" className="cursor-pointer flex-shrink-0 grid h-9 w-9 place-items-center rounded-lg text-white shadow-sm transition" style={{ backgroundColor: PRIMARY }} disabled={isSending}>
+                                {/* Tambahkan ikon loading */}
+                                {isSending ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-paper-plane fa-sm"></i>}
                             </button>
                         </form>
                     </div>
@@ -448,6 +573,35 @@ export default function Show() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {isModalOpen && (
+                <div
+                    // Backdrop (latar belakang gelap)
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+                    onClick={() => setIsModalOpen(false)}
+                >
+                    <div
+                        // Container untuk gambar, mencegah modal tertutup saat gambar di-klik
+                        className="relative"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Tombol Close */}
+                        <button
+                            onClick={() => setIsModalOpen(false)}
+                            className="absolute -top-4 -right-4 flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-800 shadow-lg transition hover:scale-110"
+                        >
+                            <i className="fas fa-times"></i>
+                        </button>
+
+                        {/* Gambar dalam ukuran besar */}
+                        <img
+                            src={`/storage/${requestPhotoPath}`}
+                            alt="Foto Permintaan (Ukuran Penuh)"
+                            className="max-h-[90vh] max-w-[90vw] rounded-lg"
+                        />
                     </div>
                 </div>
             )}

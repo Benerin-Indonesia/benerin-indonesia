@@ -3,7 +3,6 @@ import { Head, Link, usePage } from "@inertiajs/react";
 
 // --- COLOR PALETTE ---
 const PRIMARY = "#206BB0";
-const SECONDARY = "#FFBD59";
 
 // --- TYPE DEFINITIONS (Unchanged) ---
 type AuthUser = { id: number; name: string; email: string; role: string };
@@ -14,6 +13,7 @@ type RequestItem = {
   category: string;
   scheduled_for?: string | null;
   status: "menunggu" | "diproses" | "dijadwalkan" | "selesai" | "dibatalkan";
+  price_offer?: number | null; // <-- TAMBAHKAN BARIS INI
 };
 type PageProps = {
   auth?: { user: AuthUser | null };
@@ -140,7 +140,7 @@ export default function UserDashboard() {
   const recentData = recent ?? [];
   const categoriesData = categories ?? [];
 
-  // --- ANIMATION EFFECT (Unchanged) ---
+  // --- ANIMATION EFFECT
   useEffect(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return;
     const elements = Array.from(document.querySelectorAll<HTMLElement>(".reveal"));
@@ -163,6 +163,21 @@ export default function UserDashboard() {
       elements.forEach(show);
     }
   }, []);
+
+  const formatRupiah = (angka) => {
+    // Cek jika angka null atau undefined untuk menghindari error
+    if (angka === null || angka === undefined) {
+      return "Rp 0"; // Atau bisa juga return "" (string kosong)
+    }
+
+    // Format angka ke mata uang Rupiah
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0, // Menghilangkan angka desimal ,00
+      maximumFractionDigits: 0
+    }).format(angka);
+  };
 
   return (
     <AppLayout user={auth?.user ?? null}>
@@ -210,29 +225,28 @@ export default function UserDashboard() {
                   <i className="fas fa-plus text-xs" /> Buat Permintaan Baru
                 </Link>
               </div>
-              <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-4 mb-3">
                 {categoriesData.map((c) => (
                   <Link
                     key={c.slug}
                     href={`/user/permintaan/buat?category=${encodeURIComponent(c.slug)}`}
-                    className="group flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-gray-50 p-4 text-center transition duration-200 hover:border-blue-300 hover:bg-white hover:shadow-lg"
-                  >
-                    {/* --- BAGIAN YANG DIUBAH --- */}
+                    className="group flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-gray-50 p-4 text-center transition duration-200 hover:border-blue-300 hover:bg-white hover:shadow-lg">
                     <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm transition duration-200 group-hover:bg-blue-50">
-                      {/* Menggunakan <img> untuk menampilkan gambar dari properti 'icon' */}
                       <img
                         src={c.icon}
                         alt={c.name}
                         className="h-10 w-10 object-contain transition-transform duration-300 group-hover:scale-110"
                       />
                     </div>
-                    {/* --- Batas Perubahan --- */}
 
                     <span className="mt-4 block text-sm font-semibold text-gray-800">{c.name}</span>
                     <span className="text-xs text-gray-500">{c.hint}</span>
                   </Link>
                 ))}
               </div>
+              <Link href="/user/categories" className="text-sm ml-2.5 font-semibold hover:underline" style={{ color: PRIMARY }}>
+                Lihat Semua Kategori
+              </Link>
             </section>
 
             {/* Recent Requests Section (with updated buttons) */}
@@ -255,30 +269,62 @@ export default function UserDashboard() {
                     </div>
                   ) : (
                     recentData.map((r) => (
-                      <div key={r.id} className="rounded-xl bg-white p-4 my-2.5 shadow-sm border border-gray-200/80 transition hover:shadow-md hover:border-gray-300">
-                        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-3">
-                              <p className="truncate text-base font-semibold text-gray-900">{r.title}</p>
-                              <StatusBadge status={r.status} />
-                            </div>
-                            <p className="mt-1 text-sm text-gray-600">
-                              <span className="font-medium">{r.category.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
-                              {r.scheduled_for && (
-                                <>
-                                  <span className="mx-2 text-gray-300">•</span>
-                                  <i className="fas fa-calendar-alt fa-xs mr-1.5 text-gray-400" />
-                                  <span>{new Date(r.scheduled_for).toLocaleDateString("id-ID", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
-                                </>
-                              )}
-                            </p>
+                      <div
+                        key={r.id}
+                        className="group relative flex flex-col justify-between rounded-xl bg-white p-4 pl-6 my-2.5 shadow-sm transition-all duration-300 ease-in-out hover:shadow-lg hover:-translate-y-1 border border-transparent hover:border-blue-200"
+                      >
+                        <div>
+                          {/* --- Header: Judul & Status --- */}
+                          <div className="flex items-start justify-between">
+                            <h3 className="pr-2 text-base font-bold text-slate-800 group-hover:text-[#206BB0]">
+                              {r.title}
+                            </h3>
+                            <StatusBadge status={r.status} />
                           </div>
-                          <div className="flex w-full shrink-0 gap-2 sm:w-auto">
-                            <Link href={`/user/permintaan/${r.id}`} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-50 text-center">
+
+                          {/* --- Meta Info: Kategori & Jadwal --- */}
+                          <div className="mt-2 flex flex-col gap-1.5 text-sm text-slate-500 sm:flex-row sm:items-center sm:gap-4">
+                            <div className="flex items-center gap-2">
+                              <i className="fas fa-tag fa-xs w-4 text-center text-slate-400" />
+                              <span className="font-medium">{r.category.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                            </div>
+                            {r.scheduled_for && (
+                              <div className="flex items-center gap-2">
+                                <i className="fas fa-calendar-alt fa-xs w-4 text-center text-slate-400" />
+                                <span>{new Date(r.scheduled_for).toLocaleDateString("id-ID", { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* --- Bagian Tengah: Penawaran Harga & Aksi --- */}
+                        <div className="mt-4">
+                          {/* [BARU] Tampilan Penawaran Harga */}
+                          {r.price_offer && (
+                            <div className="mb-4 flex items-center justify-between rounded-lg bg-emerald-50/80 px-3 py-2 text-emerald-900">
+                              <div className="flex items-center gap-2.5">
+                                <i className="fas fa-money-bill-wave text-emerald-600"></i>
+                                <span className="text-sm font-semibold">Penawaran Harga</span>
+                              </div>
+                              <span className="text-base font-bold">
+                                {formatRupiah(r.price_offer)}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* --- Aksi Tombol --- */}
+                          <div className="flex w-full shrink-0 gap-3">
+                            <Link
+                              href={`/user/permintaan/${r.id}`}
+                              className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors duration-200 hover:bg-slate-50 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                            >
                               <i className="fas fa-eye text-xs" />
                               <span>Detail</span>
                             </Link>
-                            <Link href={`/u/chat?request=${r.id}`} className="flex-1 text-white bg-[#206BB0] inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition hover:bg-[#FFBD59] text-center">
+                            <Link
+                              href={`/user/permintaan/${r.id}/#section-chat-user`}
+                              className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-[#206BB0] px-3 py-2 text-sm font-semibold text-white transition-all duration-300 hover:bg-[#FFBD59] hover:shadow-md hover:shadow-yellow-500/30 focus:outline-none focus:ring-2 focus:ring-[#FFBD59]"
+                            >
                               <i className="fas fa-comments text-xs" />
                               <span>Chat</span>
                             </Link>

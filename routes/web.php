@@ -26,6 +26,7 @@ use App\Http\Controllers\Teknisi\TechnicianController;
 use App\Http\Controllers\ServiceRequest\Teknisi\ServiceRequestController as TechnicianServiceRequestController;
 use App\Http\Controllers\ServiceRequest\User\ServiceRequestController as UserServiceRequestController;
 use App\Http\Controllers\User\PaymentController;
+use App\Http\Controllers\Chat\ChatMessageController;
 
 /* -------------------- Public / Landing -------------------- */
 
@@ -78,11 +79,16 @@ Route::prefix('user')->name('user.')->group(function () {
             ->name('permintaan.refund');
 
         // Payment
-        Route::get('/payment/{payment}', [PaymentController::class, 'showPaymentPage'])->name('payment.show');
+        Route::get('/payment', function () {
+            return redirect()->back();
+        });
         Route::post('/payment', [PaymentController::class, 'paymentHandler'])->name('payment');
         Route::post('/payment/success', [PaymentController::class, 'paymentSuccess'])->name('payment.success');
         Route::post('/payment/pending', [PaymentController::class, 'paymentPending'])->name('payment.pending');
         Route::post('/payment/fail', [PaymentController::class, 'paymentFail'])->name('payment.fail');
+
+        //chat
+        Route::post('/chat/request/{serviceRequest}', [ChatMessageController::class, 'store'])->name('chat.store');
     });
 });
 
@@ -115,6 +121,9 @@ Route::prefix('teknisi')->name('teknisi.')->group(function () {
         // Teknisi Service Request
         Route::get('/permintaan/{id}', [TechnicianServiceRequestController::class, 'show'])->name('service.show');
         Route::post('/permintaan-harga', [TechnicianServiceRequestController::class, 'createPrice'])->name('technician-service.request-price');
+
+        //chat
+        Route::post('/chat/request/{serviceRequest}', [ChatMessageController::class, 'store'])->name('chat.store');
     });
 });
 

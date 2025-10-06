@@ -5,6 +5,7 @@ namespace App\Http\Controllers\ServiceRequest\User;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Payment;
+use App\Models\RequestPhoto;
 use App\Models\ServiceRequest;
 use App\Models\TechnicianService;
 use Illuminate\Http\Request;
@@ -48,34 +49,46 @@ class ServiceRequestController extends Controller
 
     public function show(Request $request)
     {
-        // Baris ini tidak diubah.
-        $serviceRequest = ServiceRequest::findOrFail($request->id);
+        // --- PEMBENAHAN 1: KEAMANAN (OTORISASI) & EFISIENSI (EAGER LOADING) ---
+        // mencegah N+1 query problem.
+        $serviceRequest = ServiceRequest::with(['messages.sender'])
+            // Pastikan user yang login hanya bisa melihat permintaannya sendiri.
+            ->where('user_id', Auth::id())
+            ->findOrFail($request->id);
 
-        // Ambil record payment.
+        // --- PEMBENAHAN 2: MENGAMBIL DATA PAYMENT DENGAN CARA YANG LEBIH ANDAL ---
         $payment = Payment::where('service_request_id', $serviceRequest->id)
             ->latest()
             ->first();
+
+        $requestPhotoPath = RequestPhoto::where('service_request_id', $serviceRequest->id)->first();
+        // dd($requestPhotoPath->path);
 
         $paymentStatus = $payment ? $payment->status : false;
 
         $needsPaymentAction = !($payment && $payment->status === 'settled');
 
+        // --- PEMBENAHAN 3: MENGAKSES DATA PESAN YANG SUDAH DI-LOAD ---
+        // tidak perlu query lagi, karena datanya sudah dimuat oleh `with()`.
+        $messages = $serviceRequest->messages;
+
         return Inertia::render('user/request-service/show', [
             'request' => $serviceRequest,
             'paymentStatus' => $paymentStatus,
+            'requestPhotoPath' => $requestPhotoPath->path ?? null,
+            'initialMessages' => $messages,
             'needsPaymentAction' => $needsPaymentAction,
         ]);
     }
 
     public function store(Request $request)
     {
-        // dd($request->all());
         $validated = $request->validate([
             'category'      => 'required|string|max:255',
             'title'         => 'required|string|max:255',
             'description'   => 'required|string',
-            // 'scheduled_for' => 'required|date|after_or_equal:today',
-            'scheduled_for' => 'required|date',
+            'scheduled_for' => 'required|date|after_or_equal:today',
+            'image'         => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
         // slug kategori
@@ -92,12 +105,10 @@ class ServiceRequestController extends Controller
                 'error_notif' => 'Maaf, tidak ada teknisi tersedia untuk kategori ini. Silakan coba lagi nanti.',
             ]);
         }
-        // dd($technician->technician->phone);
 
-        // Simpan request
+        // --- Simpan Service Request ---
         $serviceRequest = ServiceRequest::create([
             'user_id'       => $request->user()->id,
-            // 'technician_id' => 8,
             'technician_id' => $technician->technician_id, // FK ke users
             'title'         => $validated['title'],
             'category'      => $slugCategory,
@@ -105,6 +116,18 @@ class ServiceRequestController extends Controller
             'scheduled_for' => $validated['scheduled_for'],
             'status'        => 'menunggu',
         ]);
+
+        // --- Simpan foto request (jika ada gambar) ---
+        if ($request->hasFile('image')) {
+            // Simpan file ke storage/app/public/request-photo-service/
+            $path = $request->file('image')->store('request_photos', 'public');
+
+            // Simpan record ke tabel request_photos
+            RequestPhoto::create([
+                'service_request_id' => $serviceRequest->id,
+                'path' => $path,
+            ]);
+        }
 
         return redirect()
             ->route('user.permintaan.show', $serviceRequest->id)

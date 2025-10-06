@@ -7,30 +7,41 @@ use Illuminate\Http\Request;
 use App\Models\ServiceRequest;
 use Inertia\Inertia;
 use App\Models\Payment;
+use App\Models\RequestPhoto;
+use Illuminate\Support\Facades\Auth;
 
 class ServiceRequestController extends Controller
 {
     /**
-     * Menampilkan service secara detail
+     * Menampilkan service secara detail untuk teknisi.
      */
     public function show(Request $request)
     {
-        // Baris ini tidak diubah. Setelah baris ini, variabel $request berisi model ServiceRequest.
-        $request = ServiceRequest::findorFail($request->id);
+        // Mencari ServiceRequest berdasarkan ID, TAPI hanya untuk teknisi yang sedang login.
+        $serviceRequest = ServiceRequest::with(['messages.sender', 'user'])
+            ->where('technician_id', Auth::id()) // <-- Penambahan Keamanan
+            ->findOrFail($request->id);
 
-        // 1. Ambil record payment berdasarkan payment_id yang ada di service request.
-        $payment = Payment::where('service_request_id', $request->id)->first();
+        // Baris-baris di bawah ini tetap sama, hanya sumber datanya lebih efisien.
+        $payment = Payment::where('service_request_id', $serviceRequest->id)
+            ->latest()
+            ->first();
 
-        // 2. Dapatkan statusnya. Jika payment tidak ditemukan (masih null), beri status default.
+        $requestPhotoPath = RequestPhoto::where('service_request_id', $serviceRequest->id)->first();
+        // dd($requestPhotoPath->path);
+
         $paymentStatus = $payment ? $payment->status : false;
-        
-        // 3. Buat kesimpulan boolean: true jika status BUKAN 'settled'.
-        $needsPaymentAction = ($paymentStatus !== 'settled');
+
+        $needsPaymentAction = !($payment && $payment->status === 'settled');
+
+        $messages = $serviceRequest->messages;
 
         return Inertia::render('teknisi/request-service/show', [
-            'request' => $request,
+            'request' => $serviceRequest,
             'paymentStatus' => $paymentStatus,
+            'requestPhotoPath' => $requestPhotoPath->path ?? null,
             'needsPaymentAction' => $needsPaymentAction,
+            'initialMessages' => $messages,
         ]);
     }
 
