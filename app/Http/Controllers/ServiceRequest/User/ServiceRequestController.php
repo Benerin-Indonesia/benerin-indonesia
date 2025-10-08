@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\ServiceRequest\User;
 
 use App\Http\Controllers\Controller;
+use App\Models\Balance;
 use App\Models\Category;
 use App\Models\Payment;
 use App\Models\RequestPhoto;
@@ -12,9 +13,79 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\DB;
 
 class ServiceRequestController extends Controller
 {
+    // public function index()
+    // {
+    //     $serviceRequest = ServiceRequest::all();
+
+    //     return Inertia::render('user/request-service/index', [
+    //         "serviceRequests" => $serviceRequest
+    //     ]);
+    // }
+    public function index(Request $request)
+    {
+        // Validasi input filter untuk keamanan
+        $request->validate([
+            'status'        => 'nullable|string|in:menunggu,diproses,dijadwalkan,selesai,dibatalkan',
+            'search'        => 'nullable|string|max:100',
+            'tanggal_mulai' => 'nullable|date',
+            'tanggal_akhir' => 'nullable|date|after_or_equal:tanggal_mulai',
+        ]);
+
+        $query = ServiceRequest::query()
+            ->with('user:id,name')
+            ->where('user_id', auth()->id())
+            ->latest('id');
+
+        // Terapkan filter pencarian
+        $query->when($request->input('search'), function ($q, $search) {
+            $q->where('title', 'like', '%' . $search . '%');
+        });
+
+        // Terapkan filter status
+        $query->when($request->input('status'), function ($q, $status) {
+            $q->where('status', $status);
+        });
+
+        // Terapkan filter tanggal_mulai
+        $query->when($request->input('tanggal_mulai'), function ($q, $tanggalMulai) {
+            $q->whereDate('created_at', '>=', $tanggalMulai);
+        });
+
+        // Terapkan filter tanggal_akhir
+        $query->when($request->input('tanggal_akhir'), function ($q, $tanggalAkhir) {
+            $q->whereDate('created_at', '<=', $tanggalAkhir);
+        });
+
+        $serviceRequests = $query->paginate()->withQueryString();
+
+        return Inertia::render('user/request-service/index', [
+            'serviceRequests' => $serviceRequests,
+            'filters' => $request->only(['search', 'status', 'tanggal_mulai', 'tanggal_akhir']),
+        ]);
+    }
+
+    public function categoriesIndex()
+    {
+        // Ambil semua kategori dari database
+        $categories = Category::all()->map(function ($category) {
+            return [
+                'slug' => $category->slug,
+                'name' => $category->name,
+                // Pastikan path ikon di-resolve dengan benar menggunakan asset()
+                'icon' => asset($category->icon),
+                'description' => $category->description, // Tambahkan deskripsi
+            ];
+        });
+
+        return Inertia::render('user/request-service/categories-index', [
+            'categories' => $categories,
+        ]);
+    }
+
     /**
      * Form buat permintaan baru
      */
@@ -152,14 +223,88 @@ class ServiceRequestController extends Controller
             ->with('fail', 'Penawaran harga berhasil ditolak');
     }
 
+    /**
+     * Method untuk menyelesaikan layanan oleh user.
+     */
     public function endService(Request $request)
     {
-        $serviceRequest = ServiceRequest::where('id', $request->id)->first();
-        $serviceRequest->status = "selesai";
-        $serviceRequest->save();
+        // 1. VALIDASI INPUT
+        // Pastikan frontend mengirim 'id' dari service request
+        $validated = $request->validate([
+            'id' => 'required|exists:service_requests,id',
+        ]);
 
-        return redirect()
-            ->back()
-            ->with('selesai', 'layanan servis benerin telah selesai');
+        // 2. PENGAMBILAN DATA BERDASARKAN REQUEST
+        // Ambil ServiceRequest dari database berdasarkan ID yang dikirim dari form
+        $serviceRequest = ServiceRequest::find($validated['id']);
+        
+        // 3. OTORISASI & VALIDASI KONDISI
+        // Pastikan user yang login adalah pemilik Service Request
+        if (Auth::id() !== $serviceRequest->user_id) {
+            abort(403, 'Akses ditolak.');
+        }
+        
+        // Pastikan layanan berada di status yang benar ('dijadwalkan')
+        if ($serviceRequest->status !== 'dijadwalkan') {
+            return redirect()->back()->withErrors(['status' => 'Layanan ini tidak dapat diselesaikan.']);
+        }
+        
+        // Ambil data pembayaran yang sudah lunas (settled)
+        $payment = Payment::where('service_request_id', $serviceRequest->id)->where('status', 'settled')->first();
+        if (!$payment) {
+            return redirect()->back()->withErrors(['payment' => 'Penyelesaian gagal karena data pembayaran tidak ditemukan atau belum lunas.']);
+        }
+        
+        // 4. KALKULASI KEUANGAN
+        $fullAmount = $payment->amount;
+        $feePercentage = 0.10; // Fee 10%
+        $feeAmount = $fullAmount * $feePercentage;
+        $technicianAmount = $fullAmount - $feeAmount;
+
+        // 6. PROSES TRANSAKSI DATABASE (Logika ini tetap sama karena sudah aman)
+        DB::transaction(function () use ($serviceRequest, $payment, $fullAmount, $feeAmount, $technicianAmount) {
+
+            // Entri 1: Potong Saldo Pengguna
+            Balance::create([
+                'owner_role' => 'user',
+                'owner_id'   => $serviceRequest->user_id,
+                'amount'     => -$fullAmount,
+                'type'       => 'escrow_hold',
+                'ref_table'  => 'payments',
+                'ref_id'     => $payment->id,
+                'note'       => "Pembayaran layanan #{$serviceRequest->id}: {$serviceRequest->title}",
+                // ... kolom lain ...
+            ]);
+
+            // Entri 2: Tambah Saldo Teknisi
+            Balance::create([
+                'owner_role' => 'technician',
+                'owner_id'   => $serviceRequest->technician_id,
+                'amount'     => $technicianAmount,
+                'type'       => 'escrow_release',
+                'ref_table'  => 'payments',
+                'ref_id'     => $payment->id,
+                'note'       => "Pendapatan bersih 90% dari layanan #{$serviceRequest->id}",
+                // ... kolom lain ...
+            ]);
+
+            // Entri 3: Data Saldo Fee
+            Balance::create([
+                'owner_role' => 'technician',
+                'owner_id'   => $serviceRequest->technician_id,
+                'amount'     => -$feeAmount,
+                'type'       => 'service_fee',
+                'ref_table'  => 'payments',
+                'ref_id'     => $payment->id,
+                'note'       => "Biaya platform 10% dari layanan #{$serviceRequest->id}",
+                // ... kolom lain ...
+            ]);
+
+            // 7. UPDATE STATUS
+            $serviceRequest->update(['status' => 'selesai']);
+        });
+
+        // 8. KEMBALIKAN RESPONS
+        return redirect()->back()->with('status', 'layanan_selesai');
     }
 }

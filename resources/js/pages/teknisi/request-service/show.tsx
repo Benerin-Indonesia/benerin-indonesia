@@ -76,11 +76,10 @@ function AppLayout({ user, children }: PropsWithChildren<{ user: AuthUser | null
                             <img
                                 src="/storage/assets/logo.png"
                                 alt="Benerin Indonesia"
-                                className="w-[150px] rounded object-contain"
-                            />
+                                className="w-[150px] rounded object-contain" />
                         </Link>
                         <nav className="hidden md:flex md:items-center md:gap-x-8">
-                            <Link href="/teknisi/home" className="flex items-center gap-2 text-sm font-semibold" style={{ color: PRIMARY }}><i className="fas fa-home" /> Beranda</Link>
+                            <Link href="/teknisi/home" className="flex items-center gap-2 text-sm font-semibold"><i className="fas fa-home" /> Beranda</Link>
                             <Link href="/teknisi/permintaan" className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900"><i className="fas fa-briefcase" /> Pekerjaan</Link>
                             <Link href="/teknisi/jadwal" className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900"><i className="fas fa-calendar-alt" /> Jadwal</Link>
                         </nav>
@@ -91,8 +90,11 @@ function AppLayout({ user, children }: PropsWithChildren<{ user: AuthUser | null
                             {isProfileMenuOpen && (
                                 <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
                                     <div className="px-4 py-2 border-b"><p className="text-sm font-semibold truncate">{user?.name}</p><p className="text-xs text-gray-500 truncate">{user?.email}</p></div>
-                                    <Link href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i className="fas fa-user-edit w-6 mr-1"></i> Profil Saya</Link>
+                                    <Link href="/teknisi/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i className="fas fa-user-edit w-6 mr-1"></i> Profil Saya</Link>
                                     <Link href="/teknisi/wallet" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i className="fas fa-wallet w-6 mr-1"></i> Wallet & Saldo</Link>
+                                    <Link href="/teknisi/pencairan-dana" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                        <i className="fas fa-money-bill-wave w-6 mr-1"></i> Pencairan Dana
+                                    </Link>
                                     <Link href="/logout" method="post" as="button" className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"><i className="fas fa-sign-out-alt w-6 mr-1"></i> Keluar</Link>
                                 </div>
                             )}
@@ -103,10 +105,10 @@ function AppLayout({ user, children }: PropsWithChildren<{ user: AuthUser | null
             <main>{children}</main>
             <footer className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t z-30">
                 <nav className="grid grid-cols-4 h-16">
-                    <Link href="/teknisi/dashboard" className="flex flex-col items-center justify-center gap-1 text-xs" style={{ color: PRIMARY }}><i className="fas fa-home text-xl"></i><span>Beranda</span></Link>
+                    <Link href="/teknisi/home" className="flex flex-col items-center justify-center gap-1 text-xs"><i className="fas fa-home text-xl"></i><span>Beranda</span></Link>
                     <Link href="/teknisi/permintaan" className="flex flex-col items-center justify-center gap-1 text-xs text-gray-600"><i className="fas fa-briefcase text-xl"></i><span>Pekerjaan</span></Link>
                     <Link href="/teknisi/jadwal" className="flex flex-col items-center justify-center gap-1 text-xs text-gray-600"><i className="fas fa-calendar-alt text-xl"></i><span>Jadwal</span></Link>
-                    <Link href="/profile" className="flex flex-col items-center justify-center gap-1 text-xs text-gray-600"><i className="fas fa-user-circle text-xl"></i><span>Profil</span></Link>
+                    <Link href="/teknisi/profile" className="flex flex-col items-center justify-center gap-1 text-xs text-gray-600"><i className="fas fa-user-circle text-xl"></i><span>Profil</span></Link>
                 </nav>
             </footer>
             <div className="h-16 md:hidden"></div>
@@ -304,7 +306,8 @@ export default function Show() {
                             </h1>
                         </div>
                         <Link
-                            href="/teknisi/home"
+                            as="button"
+                            onClick={() => window.history.back()}
                             className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
                         >
                             <i className="fas fa-arrow-left fa-xs" /> Kembali
@@ -386,31 +389,53 @@ export default function Show() {
 
                         {/* Kartu: Pekerjaan Selesai (dari sudut pandang Teknisi) */}
                         {request.status === "selesai" && (
-                            <div className="rounded-2xl p-6 text-center text-white shadow-lg" style={{ background: `linear-gradient(135deg, ${PRIMARY}, #1a5a96)` }}>
+                            <div
+                                className="rounded-2xl p-6 text-center text-white shadow-lg"
+                                style={{ background: `linear-gradient(135deg, #10B981, #059669)` }} // Menggunakan warna hijau untuk status "selesai"
+                            >
                                 <div className="grid h-14 w-14 mx-auto place-items-center rounded-full bg-white/20 backdrop-blur-sm border border-white/30">
-                                    <i className="fas fa-money-bill text-3xl text-white"></i>
+                                    <i className="fas fa-check-circle text-3xl text-white"></i>
                                 </div>
                                 <h2 className="mt-4 text-xl font-bold">Pekerjaan Selesai!</h2>
-                                <p className="mt-1 text-sm text-white/80">Dana untuk layanan ini telah dilepaskan ke saldo Anda.</p>
-                                <div className="my-4">
-                                    <p className="text-sm font-semibold text-white/70">Pendapatan Diterima:</p>
-                                    <p className="text-4xl font-bold tracking-tight">
-                                        {formatRupiah(request.accepted_price)}
-                                    </p>
+                                <p className="mt-1 text-sm text-white/80">Rincian pendapatan untuk layanan ini telah ditambahkan ke saldo Anda.</p>
+
+                                {/* --- [MODIFIKASI] --- Menampilkan rincian pendapatan --- */}
+                                <div className="mt-5 rounded-lg bg-white/10 p-4">
+                                    <dl>
+                                        <div className="flex justify-between items-center text-sm">
+                                            <dt className="text-white/70">Total Pembayaran</dt>
+                                            <dd className="font-medium text-white/70 line-through">
+                                                {formatRupiah(request.accepted_price)}
+                                            </dd>
+                                        </div>
+                                        <div className="flex justify-between items-center text-sm mt-1">
+                                            <dt className="text-white/70">Potongan Biaya Platform (10%)</dt>
+                                            <dd className="font-medium text-white/70">
+                                                - {formatRupiah(request.accepted_price * 0.10)}
+                                            </dd>
+                                        </div>
+                                        <div className="flex justify-between items-center font-bold text-lg mt-2 pt-2 border-t border-white/20">
+                                            <dt>Pendapatan Bersih</dt>
+                                            <dd className="text-2xl" style={{ color: SECONDARY }}>
+                                                {formatRupiah(request.accepted_price * 0.90)}
+                                            </dd>
+                                        </div>
+                                    </dl>
                                 </div>
+
                                 <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4">
                                     <Link
-                                        href="/teknisi/earnings"
-                                        className="w-full sm:w-auto cursor-pointer rounded-xl px-5 py-2.5 text-sm font-semibold text-gray-800 bg-white shadow-sm transition hover:scale-105"
+                                        href="/teknisi/wallet"
+                                        className="w-full sm:w-auto cursor-pointer rounded-xl px-5 py-2.5 text-sm font-semibold bg-white text-gray-800 shadow-sm transition hover:scale-105"
                                     >
                                         <i className="fas fa-wallet mr-2"></i>
-                                        Lihat Riwayat Pendapatan
+                                        Lihat Saldo Wallet
                                     </Link>
                                     <Link
-                                        href="/teknisi/home"
+                                        href="/teknisi/permintaan" // Mengarahkan ke daftar pekerjaan
                                         className="w-full sm:w-auto text-xs text-white/80 hover:text-white hover:underline transition"
                                     >
-                                        Cari Pekerjaan Berikutnya
+                                        Kembali ke Daftar Pekerjaan
                                     </Link>
                                 </div>
                             </div>
@@ -498,9 +523,9 @@ export default function Show() {
                     {/* chat */}
                     <div id="section-chat-user" className="lg:col-span-1 rounded-2xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden h-[73vh] md:h-[60vh]">
                         <div className="p-4 border-b border-gray-200 flex items-center gap-3">
-                            <img src={`https://ui-avatars.com/api/?name=Teknisi&background=random`} alt={'Teknisi'} className="h-10 w-10 rounded-full" />
+                            <img src={`https://ui-avatars.com/api/?name=Client&background=random`} alt={'Client'} className="h-10 w-10 rounded-full" />
                             <div>
-                                <h2 className="text-sm font-semibold text-gray-900">Diskusi dengan Teknisi</h2>
+                                <h2 className="text-sm font-semibold text-gray-900">Diskusi dengan Client</h2>
                             </div>
                         </div>
 

@@ -70,6 +70,9 @@ function AppLayout({ user, children }: PropsWithChildren<{ user: AuthUser | null
               <Link href="/user/permintaan" className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition">
                 <i className="fas fa-clipboard-list" /> Permintaan
               </Link>
+              <Link href="/user/refund" className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition">
+                <i className="fas fa-hand-holding-usd" /> Refund
+              </Link>
             </nav>
 
             {/* Profile Menu Dropdown */}
@@ -88,10 +91,12 @@ function AppLayout({ user, children }: PropsWithChildren<{ user: AuthUser | null
                     <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
                     <p className="text-xs text-gray-500 truncate">{user?.email}</p>
                   </div>
-                  <Link href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left">
+                  <Link href="/user/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left">
                     <i className="fas fa-user-edit w-6 mr-1"></i> Profil Saya
                   </Link>
-                  <Link href="/user/wallet" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i className="fas fa-wallet w-6 mr-1"></i> Wallet & Saldo</Link>
+                  {/* <Link href="/user/wallet" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i className="fas fa-wallet w-6 mr-1"></i> Wallet & Saldo</Link> */}
+                  {/* --- [BARU] --- Menu Refund di Dropdown Profil */}
+                  <Link href="/user/refund" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i className="fas fa-hand-holding-usd w-6 mr-1"></i> Refund</Link>
                   <Link href="/logout" method="post" as="button" className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">
                     <i className="fas fa-sign-out-alt w-6 mr-1"></i> Keluar
                   </Link>
@@ -107,7 +112,8 @@ function AppLayout({ user, children }: PropsWithChildren<{ user: AuthUser | null
 
       {/* --- BOTTOM NAVIGATION BAR (Mobile Only) --- */}
       <footer className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-t-lg z-30">
-        <nav className="grid grid-cols-3 h-16">
+        {/* --- [MODIFIKASI] --- Mengubah grid menjadi 4 kolom --- */}
+        <nav className="grid grid-cols-4 h-16">
           <Link href="/user/home" className="flex flex-col items-center justify-center gap-1 text-xs font-medium" style={{ color: PRIMARY }}>
             <i className="fas fa-home text-xl"></i>
             <span>Beranda</span>
@@ -116,7 +122,12 @@ function AppLayout({ user, children }: PropsWithChildren<{ user: AuthUser | null
             <i className="fas fa-clipboard-list text-xl"></i>
             <span>Permintaan</span>
           </Link>
-          <Link href="/profile" className="flex flex-col items-center justify-center gap-1 text-xs font-medium text-gray-600 hover:text-blue-600">
+          {/* --- [BARU] --- Menu Refund di Navigasi Bawah (Mobile) */}
+          <Link href="/user/refund" className="flex flex-col items-center justify-center gap-1 text-xs font-medium text-gray-600 hover:text-blue-600">
+            <i className="fas fa-hand-holding-usd text-xl"></i>
+            <span>Refund</span>
+          </Link>
+          <Link href="/user/profile" className="flex flex-col items-center justify-center gap-1 text-xs font-medium text-gray-600 hover:text-blue-600">
             <i className="fas fa-user-circle text-xl"></i>
             <span>Profil</span>
           </Link>
@@ -271,7 +282,7 @@ export default function UserDashboard() {
                     recentData.map((r) => (
                       <div
                         key={r.id}
-                        className="group relative flex flex-col justify-between rounded-xl bg-white p-4 pl-6 my-2.5 shadow-sm transition-all duration-300 ease-in-out hover:shadow-lg hover:-translate-y-1 border border-transparent hover:border-blue-200"
+                        className="group relative flex flex-col justify-between rounded-xl bg-white p-4 pl-6 my-2.5 shadow-sm transition-all duration-300 ease-in-out hover:shadow-lg hover:-translate-y-1 border hover:border-blue-200"
                       >
                         <div>
                           {/* --- Header: Judul & Status --- */}
@@ -365,7 +376,7 @@ export default function UserDashboard() {
               <div className="rounded-2xl p-6 text-white shadow-lg" style={{ background: `linear-gradient(135deg, ${PRIMARY}, #1a5a96)` }}>
                 <h3 className="text-lg font-bold">Butuh Bantuan?</h3>
                 <p className="mt-1 text-sm opacity-90">Tim support kami siap membantu Anda jika mengalami kendala.</p>
-                <Link href="/bantuan" className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold transition hover:scale-[1.03]" style={{ color: PRIMARY }}>
+                <Link href="/user/bantuan" className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold transition hover:scale-[1.03]" style={{ color: PRIMARY }}>
                   <i className="fas fa-life-ring" /> Pusat Bantuan
                 </Link>
               </div>

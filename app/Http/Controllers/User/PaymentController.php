@@ -138,7 +138,7 @@ class PaymentController extends Controller
         // Lakukan validasi signature & pastikan payment ditemukan
         // ... (kode validasi Anda sudah bagus)
 
-        $signatureKey = hash('sha512', $orderId . $notification->status_code . $notification->gross_amount . config('services.midtrans.server_key'));
+        $signatureKey = hash('sha512', $notification->order_id . $notification->status_code . $notification->gross_amount . config('services.midtrans.server_key'));
         if ($notification->signature_key !== $signatureKey) {
             return response()->json(['error' => 'Invalid signature'], 403);
         }
@@ -146,6 +146,7 @@ class PaymentController extends Controller
             return response()->json(['message' => 'Payment not found.'], 404);
         }
         if ($payment->status === 'settled' || $payment->status === 'failure') {
+            Log::info('Duplicate webhook ignored');
             return response()->json(['message' => 'Transaction already processed.'], 200);
         }
 
@@ -161,8 +162,8 @@ class PaymentController extends Controller
             default => Log::info("Webhook status {$notification->transaction_status} tidak ditangani."),
         };
 
-        // return response()->json(['message' => 'Webhook berhasil.'], 200);
-        return redirect()->back()->with('success', 'Price offer submitted successfully.');
+        return response()->json(['message' => 'Webhook berhasil'], 200);
+        // return redirect()->back()->with('success', 'Price offer submitted successfully.');
     }
 
 

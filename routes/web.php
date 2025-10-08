@@ -27,11 +27,14 @@ use App\Http\Controllers\ServiceRequest\Teknisi\ServiceRequestController as Tech
 use App\Http\Controllers\ServiceRequest\User\ServiceRequestController as UserServiceRequestController;
 use App\Http\Controllers\User\PaymentController;
 use App\Http\Controllers\Chat\ChatMessageController;
+use App\Http\Controllers\Teknisi\PayoutController as TechnicianpayoutController;
+use App\Http\Controllers\Teknisi\ProfileController as TeknisiProfileController;
+use App\Http\Controllers\User\ProfileController;
 
 /* -------------------- Public / Landing -------------------- */
 
 Route::get('/', [LandingPageController::class, 'index'])->name('home');
-Route::get('/login',    [PublicAuthController::class, 'showLoginChoice'])->name('login.choice');
+Route::get('/login',    [PublicAuthController::class, 'showLoginChoice'])->name('login');
 Route::get('/register', [PublicAuthController::class, 'showRegisterChoice'])->name('register.choice');
 Route::get('/ketentuan', fn() => Inertia::render('public/ketentuan'))->name('terms');
 Route::get('/privasi', fn() => Inertia::render('public/privasi'))->name('privasi');
@@ -58,13 +61,31 @@ Route::prefix('user')->name('user.')->group(function () {
         // Home user
         Route::get('/home', [userController::class, 'index'])->name('dashboard');
 
+        // Help page
+        Route::get('/bantuan', function () {
+            return Inertia::render('user/help-page');
+        });
+
+        // Profile Page
+        Route::get('/profile', [ProfileController::class, 'index'])->name('profile.index');
+        Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+
         // Request Form
         Route::get('/permintaan/buat', [UserServiceRequestController::class, 'buatPermintaan'])
             ->name('permintaan.create');
         Route::post('/permintaan/simpan', [UserServiceRequestController::class, 'store'])
-            ->name('permintaan.store');
+            ->name('permintaan.store')->middleware('throttle:permintaan-limit');
+
+        //Wallet
+        // Route::get('/wallet', [WalletController::class, 'indexUser'])->name('wallet');
+
+        //Refund
+        Route::get('/refund', [userController::class, 'refundIndex'])->name('refund.index');
+        Route::get('/permintaan/{id}/refund', [userController::class, 'refundCreate'])->name('refund.create');
+        Route::post('/permintaan/refund', [userController::class, 'refundStore'])->name('refund.store')->middleware('throttle:permintaan-limit');
 
         // Service request user
+        Route::get('/permintaan', [UserServiceRequestController::class, 'index'])->name('permintaan.index');
         Route::get('/permintaan/{id}', [UserServiceRequestController::class, 'show'])
             ->name('permintaan.show');
         Route::post('/permintaan-harga', [UserServiceRequestController::class, 'createPrice'])
@@ -75,8 +96,11 @@ Route::prefix('user')->name('user.')->group(function () {
             ->name('permintaan.reject-price');
         Route::post('/permintaan/{id}/end', [UserServiceRequestController::class, 'endService'])
             ->name('permintaan.end-service');
-        Route::post('/permintaan/{id}/refund', [UserServiceRequestController::class, 'refund'])
+        Route::post('/permintaan/{id}/refund', [userController::class, 'refundCreate'])
             ->name('permintaan.refund');
+
+        // show all Categories
+        Route::get('/categories', [UserServiceRequestController::class, 'categoriesIndex'])->name('categories');
 
         // Payment
         Route::get('/payment', function () {
@@ -115,10 +139,29 @@ Route::prefix('teknisi')->name('teknisi.')->group(function () {
         Route::get('/home', [TechnicianController::class, 'index'])->name('dashboard');
 
         // Activity toggle
-        Route::post('/toggle-activity', [TechnicianController::class, 'toggleAvailability'])
-            ->name('toggle-availability');
+        Route::post('/availability/toggle', [TechnicianController::class, 'toggleAvailability'])->name('teknisi.availability.toggle');
+        Route::post('/categories/toggle-status', [TechnicianController::class, 'toggleCategoryStatus'])->name('teknisi.categories.toggle');
+
+        //Profile
+        Route::get('/profile', [TeknisiProfileController::class, 'index'])->name('profile');
+        Route::patch('/profile', [TeknisiProfileController::class, 'update'])->name('profile.update');
+
+        // Wallet & Withdraw
+        Route::get('/wallet', [TeknisiProfileController::class, 'walletIndex'])->name('wallet');
+        Route::get('/withdraw/create', [TeknisiProfileController::class, 'walletWithdrawCreate'])->name('withdraw.create');
+        Route::post('/withdraw', [TeknisiProfileController::class, 'walletWithdrawStore'])->name('withdraw.store');
+
+        //Help
+        Route::get('/bantuan', function () {
+            return Inertia::render('teknisi/help');
+        })->name('help');
+
+        // Payout
+        Route::get('/pencairan-dana', [TechnicianpayoutController::class, 'index'])->name('payout.index');
 
         // Teknisi Service Request
+        Route::get('/permintaan', [TechnicianServiceRequestController::class, 'index'])->name('service');
+        Route::get('/jadwal', [TechnicianServiceRequestController::class, 'indexJadwal'])->name('jadwal');
         Route::get('/permintaan/{id}', [TechnicianServiceRequestController::class, 'show'])->name('service.show');
         Route::post('/permintaan-harga', [TechnicianServiceRequestController::class, 'createPrice'])->name('technician-service.request-price');
 

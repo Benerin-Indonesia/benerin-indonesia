@@ -27,7 +27,7 @@ return new class extends Migration
             $table->string('currency', 10)->default('IDR');
 
             // Tipe entri ledger
-            // 'hold' | 'payout' | 'adjustment' | 'refund_credit' | 'refund_reversal' | 'payment_debit'
+            // 'hold' | 'payout' | 'fee' | 'refund' | 'release' 
             $table->string('type', 30);
 
             // Referensi ke entitas lain (opsional), misal payments / service_requests / payouts
