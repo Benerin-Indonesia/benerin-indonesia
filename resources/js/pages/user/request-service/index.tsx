@@ -91,7 +91,7 @@ function AppLayout({ user, children }: PropsWithChildren<{ user: AuthUser | null
                                 <i className="fas fa-home" /> Beranda
                             </Link>
                             <Link href="/user/permintaan" style={{ color: PRIMARY }}
-                                style={{ color: PRIMARY }} className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition">
+                                className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition">
                                 <i className="fas fa-clipboard-list" /> Permintaan
                             </Link>
                             <Link href="/user/refund" className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition">

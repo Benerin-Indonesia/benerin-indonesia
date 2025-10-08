@@ -126,8 +126,8 @@ export default function ShowPayment() {
     });
 
     useEffect(() => {
-        const snapScriptUrl = 'https://app.sandbox.midtrans.com/snap/snap.js'; //dev
-        // const snapScriptUrl = 'https://app.midtrans.com/snap/snap.js'; // prod
+        // const snapScriptUrl = 'https://app.sandbox.midtrans.com/snap/snap.js'; //dev
+        const snapScriptUrl = 'https://app.midtrans.com/snap/snap.js'; // prod
         const script = document.createElement('script');
         script.src = snapScriptUrl;
         script.setAttribute('data-client-key', midtrans_client_key);
