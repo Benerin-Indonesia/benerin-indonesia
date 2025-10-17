@@ -13,7 +13,7 @@ type RequestItem = {
   category: string;
   scheduled_for?: string | null;
   status: "menunggu" | "diproses" | "dijadwalkan" | "selesai" | "dibatalkan";
-  price_offer?: number | null; // <-- TAMBAHKAN BARIS INI
+  price_offer?: number | null;
 };
 type PageProps = {
   auth?: { user: AuthUser | null };
@@ -39,6 +39,17 @@ function StatusBadge({ status }: { status: RequestItem["status"] }) {
     </span>
   );
 }
+
+function storageSrc(icon?: string | null) {
+  if (!icon) return "";
+  // jangan diprefix kalau sudah absolute URL atau sudah /storage
+  if (/^https?:\/\//i.test(icon)) return icon;
+  if (icon.startsWith("/storage/")) return icon;
+  // bersihin 'public/' kalau ada, lalu prefix /storage
+  const cleaned = icon.replace(/^public\//, "");
+  return `/storage/${cleaned}`;
+}
+
 
 // --- NEW COMPONENT: Application Layout with Responsive Navbar ---
 function AppLayout({ user, children }: PropsWithChildren<{ user: AuthUser | null }>) {
@@ -244,7 +255,7 @@ export default function UserDashboard() {
                     className="group flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-gray-50 p-4 text-center transition duration-200 hover:border-blue-300 hover:bg-white hover:shadow-lg">
                     <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm transition duration-200 group-hover:bg-blue-50">
                       <img
-                        src={c.icon}
+                        src={storageSrc(c.icon)}
                         alt={c.name}
                         className="h-10 w-10 object-contain transition-transform duration-300 group-hover:scale-110"
                       />

@@ -15,29 +15,36 @@ class ServiceRequestController extends Controller
 {
     public function index(Request $request)
     {
+        // Ambil perPage dari query, batasi ke pilihan yang diizinkan
+        $perPage = (int) $request->input('perPage', 10);
+        $allowed = [10, 20, 50, 100];
+        if (! in_array($perPage, $allowed, true)) {
+            $perPage = 10;
+        }
+
         $filters = [
-            'q'            => $request->string('q')->toString(),
-            'status'       => $request->string('status')->toString(),
-            'category'     => $request->string('category')->toString(),
-            'pay'          => $request->string('pay')->toString(),
-            'date_from'    => $request->string('date_from')->toString(),
-            'date_to'      => $request->string('date_to')->toString(),
-            'technician_id'=> $request->string('technician_id')->toString(),
-            'user_id'      => $request->string('user_id')->toString(),
+            'q'             => $request->string('q')->toString(),
+            'status'        => $request->string('status')->toString(),
+            'category'      => $request->string('category')->toString(),
+            'pay'           => $request->string('pay')->toString(),
+            'date_from'     => $request->string('date_from')->toString(),
+            'date_to'       => $request->string('date_to')->toString(),
+            'technician_id' => $request->string('technician_id')->toString(),
+            'user_id'       => $request->string('user_id')->toString(),
+            'perPage'       => $perPage,
         ];
 
         $query = ServiceRequest::query()
             ->with([
                 'user:id,name,email,phone',
                 'technician:id,name,email,phone',
-                // Ambil payment terbaru secara ringan; controller tidak bergantung relasi latestOfMany
+                // ambil payment terbaru per request
                 'payments' => function ($q) {
                     $q->latest('id')->limit(1);
                 },
             ])
             ->when($filters['q'] !== '', function ($q) use ($filters) {
                 $term = '%' . str_replace(' ', '%', $filters['q']) . '%';
-                // Jika q numerik, izinkan cari by id juga
                 $idNum = ctype_digit($filters['q']) ? (int) $filters['q'] : null;
 
                 $q->where(function ($w) use ($term, $idNum) {
@@ -45,21 +52,22 @@ class ServiceRequestController extends Controller
                         $w->orWhere('id', $idNum);
                     }
                     $w->orWhere('description', 'like', $term)
-                      ->orWhereHas('user', function ($wu) use ($term) {
-                          $wu->where('name', 'like', $term)->orWhere('email', 'like', $term);
-                      })
-                      ->orWhereHas('technician', function ($wt) use ($term) {
-                          $wt->where('name', 'like', $term)->orWhere('email', 'like', $term);
-                      });
+                        ->orWhereHas('user', function ($wu) use ($term) {
+                            $wu->where('name', 'like', $term)
+                                ->orWhere('email', 'like', $term);
+                        })
+                        ->orWhereHas('technician', function ($wt) use ($term) {
+                            $wt->where('name', 'like', $term)
+                                ->orWhere('email', 'like', $term);
+                        });
                 });
             })
-            ->when($filters['status'] !== '', fn ($q) => $q->where('status', $filters['status']))
-            ->when($filters['category'] !== '', fn ($q) => $q->where('category', $filters['category']))
-            ->when($filters['technician_id'] !== '', fn ($q) => $q->where('technician_id', $filters['technician_id']))
-            ->when($filters['user_id'] !== '', fn ($q) => $q->where('user_id', $filters['user_id']))
-            ->when($filters['date_from'] !== '', fn ($q) => $q->whereDate('created_at', '>=', $filters['date_from']))
-            ->when($filters['date_to'] !== '',   fn ($q) => $q->whereDate('created_at', '<=', $filters['date_to']))
-            // Filter status pembayaran (cocokkan jika ADA payment dengan status tsb).
+            ->when($filters['status'] !== '', fn($q) => $q->where('status', $filters['status']))
+            ->when($filters['category'] !== '', fn($q) => $q->where('category', $filters['category']))
+            ->when($filters['technician_id'] !== '', fn($q) => $q->where('technician_id', $filters['technician_id']))
+            ->when($filters['user_id'] !== '', fn($q) => $q->where('user_id', $filters['user_id']))
+            ->when($filters['date_from'] !== '', fn($q) => $q->whereDate('created_at', '>=', $filters['date_from']))
+            ->when($filters['date_to']   !== '', fn($q) => $q->whereDate('created_at', '<=', $filters['date_to']))
             ->when($filters['pay'] !== '', function ($q) use ($filters) {
                 $q->whereHas('payments', function ($qp) use ($filters) {
                     $qp->where('status', $filters['pay']);
@@ -67,44 +75,47 @@ class ServiceRequestController extends Controller
             })
             ->orderByDesc('id');
 
-        $requests = $query->paginate(20)->through(function (ServiceRequest $r) {
-            $payment = optional($r->payments->first());
-            return [
-                'id'              => $r->id,
-                'user_id'         => $r->user_id,
-                'technician_id'   => $r->technician_id,
-                'category'        => $r->category,
-                'description'     => $r->description,
-                'scheduled_for'   => optional($r->scheduled_for)->format('c'),
-                'accepted_price'  => $r->accepted_price,
-                'status'          => $r->status,
-                'created_at'      => optional($r->created_at)->format('c'),
-                'updated_at'      => optional($r->updated_at)->format('c'),
-                'user' => $r->user ? [
-                    'id'    => $r->user->id,
-                    'name'  => $r->user->name,
-                    'email' => $r->user->email,
-                    'phone' => $r->user->phone,
-                ] : null,
-                'technician' => $r->technician ? [
-                    'id'    => $r->technician->id,
-                    'name'  => $r->technician->name,
-                    'email' => $r->technician->email,
-                    'phone' => $r->technician->phone,
-                ] : null,
-                'payment' => $payment ? [
-                    'id'       => $payment->id,
-                    'amount'   => $payment->amount,
-                    'status'   => $payment->status,
-                    'paid_at'  => optional($payment->paid_at)->format('c'),
-                ] : null,
-            ];
-        });
+        $requests = $query
+            ->paginate($perPage)
+            ->onEachSide(1)
+            ->through(function (ServiceRequest $r) {
+                $payment = optional($r->payments->first());
 
-        // Dropdown kategori (opsional dari DB; fallback jika tidak ada tabel)
+                return [
+                    'id'             => $r->id,
+                    'user_id'        => $r->user_id,
+                    'technician_id'  => $r->technician_id,
+                    'category'       => $r->category,
+                    'description'    => $r->description,
+                    'scheduled_for'  => optional($r->scheduled_for)->format('c'),
+                    'accepted_price' => $r->accepted_price,
+                    'status'         => $r->status,
+                    'created_at'     => optional($r->created_at)->format('c'),
+                    'updated_at'     => optional($r->updated_at)->format('c'),
+                    'user' => $r->user ? [
+                        'id'    => $r->user->id,
+                        'name'  => $r->user->name,
+                        'email' => $r->user->email,
+                        'phone' => $r->user->phone,
+                    ] : null,
+                    'technician' => $r->technician ? [
+                        'id'    => $r->technician->id,
+                        'name'  => $r->technician->name,
+                        'email' => $r->technician->email,
+                        'phone' => $r->technician->phone,
+                    ] : null,
+                    'payment' => $payment ? [
+                        'id'      => $payment->id,
+                        'amount'  => $payment->amount,
+                        'status'  => $payment->status,
+                        'paid_at' => optional($payment->paid_at)->format('c'),
+                    ] : null,
+                ];
+            });
+
+        // dropdown kategori/teknisi/user buat filter
         $categories = $this->loadCategories();
 
-        // Dropdown teknisi & user untuk filter (limit agar ringan)
         $technicians = User::query()
             ->where('role', 'teknisi')
             ->orderBy('name')
@@ -125,6 +136,7 @@ class ServiceRequestController extends Controller
             'filters'     => $filters,
         ]);
     }
+
 
     /**
      * GET /admin/requests/{id}
@@ -291,7 +303,7 @@ class ServiceRequestController extends Controller
             return DB::table('categories')
                 ->orderBy('name')
                 ->get(['slug', 'name'])
-                ->map(fn ($r) => ['slug' => (string) $r->slug, 'name' => (string) $r->name])
+                ->map(fn($r) => ['slug' => (string) $r->slug, 'name' => (string) $r->name])
                 ->toArray();
         }
 

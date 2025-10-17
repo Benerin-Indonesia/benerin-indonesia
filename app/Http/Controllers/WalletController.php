@@ -36,8 +36,8 @@ class WalletController extends Controller
         }
 
         // --- Rumus ledger ---
-        $saldoSaatIni = $balances->sum('amount'); // total semua transaksi
-        $dalamPenahanan = $balances->where('type', 'escrow_release')->sum('amount'); // hanya hold
+        $saldoSaatIni = $balances->sum('amount');
+        $dalamPenahanan = $balances->where('type', 'escrow_release')->sum('amount');
         $siapDitarik = $saldoSaatIni - $dalamPenahanan;
 
         return Inertia::render('user/wallet/index', [

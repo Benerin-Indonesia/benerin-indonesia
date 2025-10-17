@@ -32,6 +32,14 @@ type PageProps = {
   categories?: CategoryWithStatus[]; // <-- [BARU]
 };
 
+function techStorageSrc(icon?: string | null) {
+  if (!icon) return "";
+  if (/^https?:\/\//i.test(icon)) return icon;
+  const cleaned = icon.replace(/^public\//, "").replace(/^\/+/, "");
+  return `/storage/${cleaned}`;
+}
+
+
 // --- HELPER FUNCTIONS ---
 function money(n?: number | null) {
   if (n == null) return "-";
@@ -418,7 +426,7 @@ export default function TechnicianDashboard() {
                             `}
                         >
                           <img
-                            src={category.icon}
+                            src={techStorageSrc(category.icon)}
                             alt={category.name}
                             className="h-10 w-10 object-contain transition-transform duration-300 group-hover:scale-110"
                           />

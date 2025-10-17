@@ -14,7 +14,7 @@ class TechnicianAuthController extends Controller
 {
     public function showLoginForm()
     {
-        return Inertia::render('teknisi/login'); // resources/js/Pages/teknisi/login.tsx
+        return Inertia::render('teknisi/login');
     }
 
     public function login(Request $request)
@@ -35,12 +35,12 @@ class TechnicianAuthController extends Controller
         }
 
         $request->session()->regenerate();
-        return redirect()->intended('/teknisi/home'); // ubah sesuai rute dashboard teknisi
+        return redirect()->intended('/teknisi/home');
     }
 
     public function showRegisterForm()
     {
-        return Inertia::render('teknisi/register'); // resources/js/Pages/teknisi/register.tsx
+        return Inertia::render('teknisi/register');
     }
 
     public function register(Request $request)

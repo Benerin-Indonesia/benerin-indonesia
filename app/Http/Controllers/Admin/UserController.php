@@ -17,29 +17,26 @@ class UserController extends Controller
      */
     public function index(Request $request)
     {
-        $q    = (string) $request->query('q', '');
-        $role = (string) $request->query('role', '');
+        $filters = [
+            'q'       => $request->string('q')->toString(),
+            'role'    => $request->string('role')->toString(),
+            'perPage' => (int) $request->input('perPage', 10),
+        ];
+        $perPage = max(1, min($filters['perPage'], 100));
 
-        // Normalize FE's "technician" -> DB enum "teknisi"
-        if ($role === 'technician') {
-            $role = 'teknisi';
-        }
+        $query = User::query()
+            ->when($filters['q'] !== '', fn($q) => $q->where(function ($qq) use ($filters) {
+                $term = '%' . str_replace(' ', '%', $filters['q']) . '%';
+                $qq->where('name', 'like', $term)->orWhere('email', 'like', $term);
+            }))
+            ->when($filters['role'] !== '', fn($q) => $q->where('role', $filters['role']))
+            ->orderBy('name');
 
-        $users = User::query()
-            ->when($q !== '', function ($qr) use ($q) {
-                $qr->where(function ($w) use ($q) {
-                    $w->where('name', 'like', "%{$q}%")
-                      ->orWhere('email', 'like', "%{$q}%");
-                });
-            })
-            ->when($role !== '', fn ($qr) => $qr->where('role', $role))
-            ->orderByDesc('id')
-            ->paginate(12)
-            ->withQueryString();
+        $users = $query->paginate($perPage)->withQueryString();
 
         return Inertia::render('admin/users/index', [
-            'users'   => $users,            // FE kamu sudah support { data: [] } atau array
-            'filters' => ['q' => $q, 'role' => $request->query('role', '')],
+            'users'   => $users,
+            'filters' => $filters,
         ]);
     }
 
@@ -66,14 +63,14 @@ class UserController extends Controller
         }
 
         $validated = $request->validate([
-            'name'     => ['required','string','max:255'],
-            'email'    => ['required','email','max:255','unique:users,email'],
-            'password' => ['required','string','min:8'],
-            'role'     => ['required', Rule::in(['user','teknisi','admin'])],
-            'phone'           => ['nullable','string','max:30'],
-            'bank_name'       => ['nullable','string','max:100'],
-            'account_name'    => ['nullable','string','max:100'],
-            'account_number'  => ['nullable','string','max:100'],
+            'name'     => ['required', 'string', 'max:255'],
+            'email'    => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8'],
+            'role'     => ['required', Rule::in(['user', 'teknisi', 'admin'])],
+            'phone'           => ['nullable', 'string', 'max:30'],
+            'bank_name'       => ['nullable', 'string', 'max:100'],
+            'account_name'    => ['nullable', 'string', 'max:100'],
+            'account_number'  => ['nullable', 'string', 'max:100'],
         ]);
 
         $user = new User();
@@ -115,14 +112,14 @@ class UserController extends Controller
         }
 
         $validated = $request->validate([
-            'name'  => ['required','string','max:255'],
-            'email' => ['required','email','max:255', Rule::unique('users','email')->ignore($id)],
-            'role'  => ['required', Rule::in(['user','teknisi','admin'])],
-            'password'       => ['nullable','string','min:8'],
-            'phone'          => ['nullable','string','max:30'],
-            'bank_name'      => ['nullable','string','max:100'],
-            'account_name'   => ['nullable','string','max:100'],
-            'account_number' => ['nullable','string','max:100'],
+            'name'  => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($id)],
+            'role'  => ['required', Rule::in(['user', 'teknisi', 'admin'])],
+            'password'       => ['nullable', 'string', 'min:8'],
+            'phone'          => ['nullable', 'string', 'max:30'],
+            'bank_name'      => ['nullable', 'string', 'max:100'],
+            'account_name'   => ['nullable', 'string', 'max:100'],
+            'account_number' => ['nullable', 'string', 'max:100'],
         ]);
 
         $user = User::findOrFail($id);

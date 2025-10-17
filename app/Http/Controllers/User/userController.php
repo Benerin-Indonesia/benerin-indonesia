@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
-class userController extends Controller
+class UserController extends Controller
 {
     public function index()
     {
@@ -22,7 +22,6 @@ class userController extends Controller
 
         // $categories = Category::select('id', 'slug', 'name', 'icon', 'hint')->limit(4)->get();
         $categories = Category::select('id', 'slug', 'name', 'icon')->get(); // NO LIMIT
-        // dd($categories);
 
         $tasks = [
             'active' => ServiceRequest::where('user_id', $user_id)
@@ -37,26 +36,23 @@ class userController extends Controller
         ];
 
         $request_items = ServiceRequest::where('user_id', $user_id)
-            ->whereIn('status', ['menunggu', 'diproses', 'dijadwalkan']) // filter sesuai kebutuhan
-            // ->whereIn('status', ['menunggu', 'diproses', 'dijadwalkan', 'selesai', 'dibatalkan']) // filter sesuai kebutuhan
+            ->whereIn('status', ['menunggu', 'diproses', 'dijadwalkan'])
+            // ->whereIn('status', ['menunggu', 'diproses', 'dijadwalkan', 'selesai', 'dibatalkan'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($req) {
                 return [
                     'id' => $req->id,
-                    'title' => $req->title ?? 'Pekerjaan Tanpa Judul', // fallback kalau tidak ada
+                    'title' => $req->title ?? 'Pekerjaan Tanpa Judul',
                     'category' => $req->category ?? '-',
                     'description' => $req->description ?? '',
-                    // 'scheduled_for' => $req->scheduled_for ? $req->scheduled_for->toDateTimeString() : null,
                     'scheduled_for' => $req->scheduled_for
                         ? \Carbon\Carbon::parse($req->scheduled_for)->toDateTimeString()
                         : null,
-                    'status' => $req->status, // pastikan value sesuai union type di TS
-                    // 'price_offer' => $req->price_offer ?? null,
+                    'status' => $req->status,
                     'price_offer' => Payment::where('service_request_id', $req->id)->value('amount') ?? null,
                 ];
             });
-        // dd($request_items);
 
         return Inertia::render('user/dashboard', [
             'stats' => $tasks,
@@ -158,7 +154,6 @@ class userController extends Controller
 
     public function refundStore(Request $request)
     {
-        // dd($request);
         // 1. Validasi semua data yang dikirim dari form, termasuk data "rahasia"
         $validated = $request->validate([
             'reason'         => 'required|string|max:1000',

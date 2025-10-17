@@ -15,7 +15,7 @@ type UserLite = {
 type TechnicianService = {
   id: number;
   technician_id: number;
-  category: string; // slug kategori
+  category: string;
   active: boolean;
   technician?: {
     id: number;
@@ -30,14 +30,23 @@ type Category = {
   name: string;
 };
 
-type Paginated<T> = { data: T[] };
+type PaginationLink = { url: string | null; label: string; active: boolean };
+
+type Paginated<T> = {
+  data: T[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  links?: PaginationLink[];
+};
 
 type PageProps = {
   auth?: { user?: { name?: string } };
   services?: Paginated<TechnicianService> | TechnicianService[];
-  technicians?: UserLite[]; // daftar user role=teknisi, untuk dropdown
+  technicians?: UserLite[];
   categories?: Category[];
-  filters?: { q?: string; category?: string; active?: string };
+  filters?: { q?: string; category?: string; active?: string; perPage?: number };
 };
 
 /* =========================================
@@ -46,7 +55,13 @@ type PageProps = {
 function isPaginatedServices(
   s: PageProps["services"]
 ): s is Paginated<TechnicianService> {
-  return typeof s === "object" && s !== null && !Array.isArray(s) && Array.isArray((s as Paginated<TechnicianService>).data);
+  return (
+    typeof s === "object" &&
+    s !== null &&
+    !Array.isArray(s) &&
+    Array.isArray((s as Paginated<TechnicianService>).data) &&
+    typeof (s as Paginated<TechnicianService>).current_page === "number"
+  );
 }
 
 const DEFAULT_CATEGORIES: Category[] = [
@@ -116,6 +131,150 @@ function Modal({
         </div>
       </div>
     </div>
+  );
+}
+
+/* =========================================
+   Pagination (di BAWAH tabel, gaya Filament)
+========================================= */
+function Pagination({
+  meta,
+  filters,
+}: {
+  meta: Pick<Paginated<TechnicianService>, "current_page" | "last_page" | "per_page" | "total">;
+  filters?: { q?: string; category?: string; active?: string; perPage?: number };
+}) {
+  if (!meta || meta.last_page <= 1) return null;
+
+  const goTo = (page: number, perPage = meta.per_page) => {
+    const params: Record<string, string | number> = {
+      page,
+      perPage,
+    };
+    if (filters?.q) params.q = filters.q!;
+    if (filters?.category) params.category = filters.category!;
+    if (typeof filters?.active !== "undefined" && filters?.active !== "")
+      params.active = filters.active!;
+    router.get("/admin/technician-services", params, {
+      preserveScroll: true,
+      preserveState: true,
+    });
+  };
+
+  const changePerPage = (pp: number) => {
+    const params: Record<string, string | number> = { page: 1, perPage: pp };
+    if (filters?.q) params.q = filters.q!;
+    if (filters?.category) params.category = filters.category!;
+    if (typeof filters?.active !== "undefined" && filters?.active !== "")
+      params.active = filters.active!;
+    router.get("/admin/technician-services", params, {
+      preserveScroll: true,
+      preserveState: true,
+    });
+  };
+
+  // daftar halaman: 1 … (current±2) … last
+  const pages: Array<number | string> = (() => {
+    const total = meta.last_page;
+    const cur = meta.current_page;
+    const delta = 2;
+    const arr: number[] = [1];
+    for (let i = cur - delta; i <= cur + delta; i++) {
+      if (i > 1 && i < total) arr.push(i);
+    }
+    if (total > 1) arr.push(total);
+    const out: Array<number | string> = [];
+    let prev: number | null = null;
+    for (const n of [...new Set(arr)].sort((a, b) => a - b)) {
+      if (prev !== null) {
+        if (n - prev === 2) out.push(prev + 1);
+        else if (n - prev > 2) out.push("…");
+      }
+      out.push(n);
+      prev = n;
+    }
+    return out;
+  })();
+
+  const from = meta.total === 0 ? 0 : (meta.current_page - 1) * meta.per_page + 1;
+  const to = Math.min(meta.current_page * meta.per_page, meta.total);
+
+  return (
+    <nav className="mt-4 flex flex-col items-stretch gap-3 rounded-xl border border-gray-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="text-xs text-gray-500">
+        Menampilkan <span className="font-medium text-gray-700">{from}</span> –{" "}
+        <span className="font-medium text-gray-700">{to}</span> dari{" "}
+        <span className="font-medium text-gray-700">{meta.total}</span> data
+      </div>
+
+      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+        <div className="inline-flex items-center gap-2">
+          <select
+            value={meta.per_page}
+            onChange={(e) => changePerPage(Number(e.target.value))}
+            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-800"
+            aria-label="Jumlah data per halaman"
+          >
+            {[10, 20, 50, 100].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-gray-500">per page</span>
+        </div>
+
+        <ul className="inline-flex select-none items-center gap-1">
+          <li>
+            <button
+              type="button"
+              disabled={meta.current_page <= 1}
+              onClick={() => goTo(meta.current_page - 1)}
+              className="min-w-[2.25rem] rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-300"
+              aria-label="Sebelumnya"
+            >
+              ‹
+            </button>
+          </li>
+
+          {pages.map((p, i) =>
+            p === "…" ? (
+              <li key={`dots-${i}`} className="px-2 text-sm text-gray-400">
+                …
+              </li>
+            ) : (
+              <li key={`p-${p}`}>
+                <button
+                  type="button"
+                  aria-current={p === meta.current_page ? "page" : undefined}
+                  onClick={() => goTo(p as number)}
+                  className={[
+                    "min-w-[2.25rem] rounded-lg border px-3 py-1.5 text-sm",
+                    p === meta.current_page
+                      ? "border-gray-900 bg-gray-900 text-white"
+                      : "border-gray-200 text-gray-700 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  {p}
+                </button>
+              </li>
+            )
+          )}
+
+          <li>
+            <button
+              type="button"
+              disabled={meta.current_page >= meta.last_page}
+              onClick={() => goTo(meta.current_page + 1)}
+              className="min-w-[2.25rem] rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-300"
+              aria-label="Berikutnya"
+            >
+              ›
+            </button>
+          </li>
+        </ul>
+      </div>
+    </nav>
   );
 }
 
@@ -213,7 +372,13 @@ function CreateServiceForm({
         <button
           type="submit"
           disabled={form.processing}
-          className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110"
+          className={[
+            "inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5",
+            "text-sm font-semibold text-white shadow-sm",
+            "transition-transform duration-150 ease-out",
+            "hover:scale-[1.02] active:scale-95 hover:brightness-110",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+          ].join(" ")}
         >
           {form.processing ? (
             <>
@@ -280,7 +445,10 @@ function EditServiceForm({
         <button
           type="button"
           onClick={onDelete}
-          className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+          className={[
+            "inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700",
+            "transition-transform duration-150 ease-out hover:scale-[1.02] active:scale-95 hover:bg-red-50",
+          ].join(" ")}
         >
           <i className="fas fa-trash" /> Hapus
         </button>
@@ -343,7 +511,13 @@ function EditServiceForm({
         <button
           type="submit"
           disabled={form.processing}
-          className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110"
+          className={[
+            "inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5",
+            "text-sm font-semibold text-white shadow-sm",
+            "transition-transform duration-150 ease-out",
+            "hover:scale-[1.02] active:scale-95 hover:brightness-110",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+          ].join(" ")}
         >
           {form.processing ? (
             <>
@@ -388,9 +562,9 @@ export default function AdminTechnicianServicesIndex() {
       page.props.technicians && page.props.technicians.length > 0
         ? page.props.technicians
         : [
-          { id: 2, name: "Nina Rahma", email: "nina@example.com" },
-          { id: 5, name: "Budi Santoso", email: "budi@example.com" },
-        ],
+            { id: 2, name: "Nina Rahma", email: "nina@example.com" },
+            { id: 5, name: "Budi Santoso", email: "budi@example.com" },
+          ],
     [page.props.technicians]
   );
 
@@ -419,6 +593,13 @@ export default function AdminTechnicianServicesIndex() {
     ];
   }, [services]);
 
+  // Meta pagination (jika ada)
+  const meta = useMemo(() => {
+    if (!isPaginatedServices(services)) return null;
+    const { current_page, last_page, per_page, total } = services;
+    return { current_page, last_page, per_page, total };
+  }, [services]);
+
   // Filter form
   const filterForm = useForm({
     q: filters?.q ?? "",
@@ -428,7 +609,11 @@ export default function AdminTechnicianServicesIndex() {
 
   const submitFilter: React.FormEventHandler = (e) => {
     e.preventDefault();
-    router.get("/admin/technician-services", filterForm.data, { preserveState: true, replace: true });
+    router.get(
+      "/admin/technician-services",
+      { ...filterForm.data, perPage: filters?.perPage ?? meta?.per_page ?? 10 },
+      { preserveState: true, replace: true }
+    );
   };
 
   // Helpers
@@ -583,21 +768,24 @@ export default function AdminTechnicianServicesIndex() {
 
             {/* Main */}
             <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-              {/* Actions: tombol tambah di atas main pencarian */}
+              {/* Actions */}
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-sm text-gray-600">
                   <span className="hidden sm:inline">Kelola kategori layanan yang diambil oleh teknisi.</span>
                 </div>
                 <button
                   onClick={() => setOpenCreate(true)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110"
+                  className={[
+                    "inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm",
+                    "transition-transform duration-150 ease-out hover:scale-[1.02] active:scale-95 hover:brightness-110",
+                  ].join(" ")}
                 >
                   <i className="fas fa-plus" />
                   Tambah Layanan
                 </button>
               </div>
 
-              {/* Filter (main pencarian) */}
+              {/* Filter */}
               <form onSubmit={submitFilter} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div className="sm:col-span-1">
@@ -645,13 +833,13 @@ export default function AdminTechnicianServicesIndex() {
                 <div className="mt-3 flex gap-2">
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition-transform duration-150 hover:scale-[1.02] active:scale-95 hover:bg-gray-50"
                   >
                     <i className="fas fa-filter" /> Terapkan
                   </button>
                   <Link
                     href="/admin/technician-services"
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition-transform duration-150 hover:scale-[1.02] active:scale-95 hover:bg-gray-50"
                     preserveState
                     replace
                   >
@@ -691,7 +879,7 @@ export default function AdminTechnicianServicesIndex() {
                               <button
                                 type="button"
                                 onClick={() => setEditItem(s)}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition-transform duration-150 hover:scale-[1.02] active:scale-95 hover:bg-gray-50"
                               >
                                 <i className="fas fa-edit" /> Edit
                               </button>
@@ -710,6 +898,9 @@ export default function AdminTechnicianServicesIndex() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination di bawah tabel */}
+                {meta && <Pagination meta={meta} filters={filters} />}
               </div>
             </main>
 

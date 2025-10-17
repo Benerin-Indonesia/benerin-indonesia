@@ -7,19 +7,41 @@ import { Head, Link, router, useForm, usePage } from "@inertiajs/react";
 type Status = "menunggu" | "dijadwalkan" | "diproses" | "selesai" | "dibatalkan";
 type PayStatus = "pending" | "settled" | "failure" | "refunded" | "cancelled";
 
-type MiniUser = {
-  id: number;
-  name: string;
-  email: string;
-  phone?: string | null;
+// --- Badge styles & labels ---
+const STATUS_LABELS: Record<Status, string> = {
+  menunggu: "Menunggu",
+  dijadwalkan: "Dijadwalkan",
+  diproses: "Diproses",
+  selesai: "Selesai",
+  dibatalkan: "Dibatalkan",
 };
 
-type PaymentLite = {
-  id: number;
-  amount: number | string;
-  status: PayStatus;
-  paid_at?: string | null;
+const STATUS_STYLES: Record<Status, string> = {
+  menunggu: "bg-slate-50 text-slate-700 border-slate-200",
+  dijadwalkan: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  diproses: "bg-amber-50 text-amber-700 border-amber-200",
+  selesai: "bg-green-50 text-green-700 border-green-200",
+  dibatalkan: "bg-rose-50 text-rose-700 border-rose-200",
 };
+
+const PAY_LABELS: Record<PayStatus, string> = {
+  pending: "Pending",
+  settled: "Settled",
+  failure: "Failure",
+  refunded: "Refunded",
+  cancelled: "Cancelled",
+};
+
+const PAY_STYLES: Record<PayStatus, string> = {
+  pending: "bg-amber-50 text-amber-700 border-amber-200",
+  settled: "bg-green-50 text-green-700 border-green-200",
+  failure: "bg-rose-50 text-rose-700 border-rose-200",
+  refunded: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  cancelled: "bg-slate-50 text-slate-700 border-slate-200",
+};
+
+type MiniUser = { id: number; name: string; email: string; phone?: string | null };
+type PaymentLite = { id: number; amount: number | string; status: PayStatus; paid_at?: string | null };
 
 type ServiceRequest = {
   id: number;
@@ -27,12 +49,11 @@ type ServiceRequest = {
   technician_id?: number | null;
   category: string;
   description?: string | null;
-  scheduled_for?: string | null; // ISO
+  scheduled_for?: string | null;
   accepted_price?: number | string | null;
   status: Status;
   created_at?: string;
   updated_at?: string;
-
   user?: MiniUser;
   technician?: MiniUser | null;
   payment?: PaymentLite | null;
@@ -40,7 +61,15 @@ type ServiceRequest = {
 
 type Category = { slug: string; name: string };
 
-type Paginated<T> = { data: T[] };
+// Laravel paginator shape we use
+type Paginated<T> = {
+  data: T[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  links?: Array<{ url: string | null; label: string; active: boolean }>;
+};
 
 type PageProps = {
   auth?: { user?: { name?: string } };
@@ -57,6 +86,8 @@ type PageProps = {
     date_to?: string;
     technician_id?: string;
     user_id?: string;
+    perPage?: number;
+    page?: number;
   };
 };
 
@@ -90,7 +121,7 @@ function fmtPrice(v?: number | string | null): string {
 function fmtDateTime(iso?: string | null): string {
   if (!iso) return "-";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
+  if (Number.isNaN(d.getTime())) return iso as string;
   return d.toLocaleString("id-ID", {
     year: "numeric",
     month: "short",
@@ -101,35 +132,133 @@ function fmtDateTime(iso?: string | null): string {
 }
 
 /* =========================================
-   Badges
+   Pagination (gaya Filament, di BAWAH tabel)
 ========================================= */
-function StatusBadge({ status }: { status: Status }) {
-  const map: Record<Status, string> = {
-    menunggu: "bg-amber-50 text-amber-800 border-amber-100",
-    dijadwalkan: "bg-indigo-50 text-indigo-700 border-indigo-100",
-    diproses: "bg-blue-50 text-blue-700 border-blue-100",
-    selesai: "bg-emerald-50 text-emerald-700 border-emerald-100",
-    dibatalkan: "bg-rose-50 text-rose-700 border-rose-100",
-  };
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-xs font-medium ${map[status]}`}>
-      <i className="fas fa-circle" /> {status}
-    </span>
-  );
-}
+function RequestsPagination({
+  meta,
+  filters,
+  baseUrl = "/admin/requests",
+}: {
+  meta: Pick<Paginated<ServiceRequest>, "current_page" | "last_page" | "per_page" | "total">;
+  filters?: PageProps["filters"];
+  baseUrl?: string;
+}) {
+  if (!meta || meta.last_page <= 1) return null;
 
-function PayBadge({ status }: { status: PayStatus }) {
-  const map: Record<PayStatus, string> = {
-    pending: "bg-gray-100 text-gray-700 border-gray-200",
-    settled: "bg-emerald-50 text-emerald-700 border-emerald-100",
-    failure: "bg-rose-50 text-rose-700 border-rose-100",
-    refunded: "bg-amber-50 text-amber-800 border-amber-100",
-    cancelled: "bg-gray-100 text-gray-600 border-gray-200",
+  const goTo = (page: number, perPage = meta.per_page) => {
+    const params: Record<string, string | number> = { page, perPage };
+    if (filters?.q) params.q = filters.q;
+    if (filters?.status) params.status = filters.status;
+    if (filters?.category) params.category = filters.category;
+    if (filters?.pay) params.pay = filters.pay;
+    if (filters?.date_from) params.date_from = filters.date_from;
+    if (filters?.date_to) params.date_to = filters.date_to;
+    if (filters?.technician_id) params.technician_id = filters.technician_id;
+    if (filters?.user_id) params.user_id = filters.user_id;
+    router.get(baseUrl, params, { preserveScroll: true, preserveState: true });
   };
+
+  const changePerPage = (pp: number) => {
+    const params = { ...(filters ?? {}), page: 1, perPage: pp };
+    router.get(baseUrl, params, { preserveScroll: true, preserveState: true });
+  };
+
+  // pages: 1 … (cur-2..cur+2) … last
+  const pages: Array<number | string> = (() => {
+    const total = meta.last_page;
+    const cur = meta.current_page;
+    const delta = 2;
+    const acc: number[] = [1];
+    for (let i = cur - delta; i <= cur + delta; i++) {
+      if (i > 1 && i < total) acc.push(i);
+    }
+    if (total > 1) acc.push(total);
+    const out: Array<number | string> = [];
+    let prev: number | null = null;
+    for (const n of [...new Set(acc)].sort((a, b) => a - b)) {
+      if (prev !== null) {
+        if (n - prev === 2) out.push(prev + 1);
+        else if (n - prev > 2) out.push("…");
+      }
+      out.push(n);
+      prev = n;
+    }
+    return out;
+  })();
+
+  const from = meta.total === 0 ? 0 : (meta.current_page - 1) * meta.per_page + 1;
+  const to = Math.min(meta.current_page * meta.per_page, meta.total);
+
   return (
-    <span className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-xs font-medium ${map[status]}`}>
-      <i className="fas fa-receipt" /> {status}
-    </span>
+    <nav className="mt-4 flex flex-col items-stretch gap-3 rounded-xl border border-gray-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="text-xs text-gray-500">
+        Menampilkan <span className="font-medium text-gray-700">{from}</span> –{" "}
+        <span className="font-medium text-gray-700">{to}</span> dari{" "}
+        <span className="font-medium text-gray-700">{meta.total}</span> data
+      </div>
+
+      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+        <div className="inline-flex items-center gap-2">
+          <select
+            value={meta.per_page}
+            onChange={(e) => changePerPage(Number(e.target.value))}
+            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-800"
+            aria-label="Jumlah data per halaman"
+          >
+            {[10, 20, 50, 100].map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+          <span className="text-xs text-gray-500">per page</span>
+        </div>
+
+        <ul className="inline-flex select-none items-center gap-1">
+          <li>
+            <button
+              type="button"
+              disabled={meta.current_page <= 1}
+              onClick={() => goTo(meta.current_page - 1)}
+              className="min-w-[2.25rem] rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-300"
+              aria-label="Sebelumnya"
+            >
+              ‹
+            </button>
+          </li>
+          {pages.map((p, i) =>
+            p === "…" ? (
+              <li key={`dots-${i}`} className="px-2 text-sm text-gray-400">…</li>
+            ) : (
+              <li key={`p-${p}`}>
+                <button
+                  type="button"
+                  aria-current={p === meta.current_page ? "page" : undefined}
+                  onClick={() => goTo(p as number)}
+                  className={[
+                    "min-w-[2.25rem] rounded-lg border px-3 py-1.5 text-sm transition-transform",
+                    p === meta.current_page
+                      ? "border-gray-900 bg-gray-900 text-white"
+                      : "border-gray-200 text-gray-700 hover:bg-gray-50 hover:scale-[1.02] active:scale-95",
+                  ].join(" ")}
+                >
+                  {p}
+                </button>
+              </li>
+            )
+          )}
+          <li>
+            <button
+              type="button"
+              disabled={meta.current_page >= meta.last_page}
+              onClick={() => goTo(meta.current_page + 1)}
+              className="min-w-[2.25rem] rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-300"
+              aria-label="Berikutnya"
+            >
+              ›
+            </button>
+          </li>
+        </ul>
+      </div>
+    </nav>
   );
 }
 
@@ -160,7 +289,7 @@ export default function AdminRequestsIndex() {
     [categories]
   );
 
-  // Sidebar & local states
+  // Sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -174,40 +303,17 @@ export default function AdminRequestsIndex() {
   const items: ServiceRequest[] = useMemo(() => {
     if (Array.isArray(requests)) return requests;
     if (isPaginatedRequests(requests)) return requests.data;
-    // fallback sample
-    return [
-      {
-        id: 101,
-        user_id: 1,
-        technician_id: 2,
-        category: "ac",
-        description: "AC kamar mati total",
-        scheduled_for: new Date().toISOString(),
-        accepted_price: 250000,
-        status: "dijadwalkan",
-        created_at: new Date().toISOString(),
-        user: { id: 1, name: "Agus Saputra", email: "agus@example.com" },
-        technician: { id: 2, name: "Nina Rahma", email: "nina@example.com" },
-        payment: { id: 99, amount: 250000, status: "settled", paid_at: new Date().toISOString() },
-      },
-      {
-        id: 102,
-        user_id: 3,
-        technician_id: null,
-        category: "tv",
-        description: "TV tidak ada gambar",
-        scheduled_for: null,
-        accepted_price: null,
-        status: "menunggu",
-        created_at: new Date().toISOString(),
-        user: { id: 3, name: "Bimo", email: "bimo@example.com" },
-        technician: null,
-        payment: null,
-      },
-    ];
+    return [];
   }, [requests]);
 
-  // Filter form (q, status, category, pay, date_from, date_to, technician_id, user_id)
+  // Meta pagination (hanya jika server kirim paginator)
+  const meta = useMemo(() => {
+    if (!isPaginatedRequests(requests)) return null;
+    const { current_page, last_page, per_page, total } = requests;
+    return { current_page, last_page, per_page, total };
+  }, [requests]);
+
+  // Filter form
   const filterForm = useForm({
     q: filters?.q ?? "",
     status: (filters?.status ?? "") as string,
@@ -221,7 +327,11 @@ export default function AdminRequestsIndex() {
 
   const submitFilter: React.FormEventHandler = (e) => {
     e.preventDefault();
-    router.get("/admin/requests", filterForm.data, { preserveState: true, replace: true });
+    router.get(
+      "/admin/requests",
+      { ...filterForm.data, perPage: filters?.perPage ?? meta?.per_page ?? 10, page: 1 },
+      { preserveState: true, replace: true }
+    );
   };
 
   // Helpers
@@ -299,9 +409,8 @@ export default function AdminRequestsIndex() {
             </nav>
 
             <div className="mt-auto">
-              {/* Tombol Logout (POST Inertia) */}
               <Link
-                href="/admin/logout"       // ganti ke "/logout" jika pakai route default Laravel
+                href="/admin/logout"
                 method="post"
                 as="button"
                 className={[
@@ -317,7 +426,6 @@ export default function AdminRequestsIndex() {
                 {!sidebarCollapsed && <span>Logout</span>}
               </Link>
 
-              {/* Footer kecil di sidebar */}
               <div className="mt-4 border-t border-gray-100 pt-4 text-center text-xs text-gray-500">
                 {!sidebarCollapsed && <>© {new Date().getFullYear()} Benerin Indonesia</>}
                 {sidebarCollapsed && <span className="block text-[10px]">© {new Date().getFullYear()}</span>}
@@ -327,7 +435,7 @@ export default function AdminRequestsIndex() {
 
           {/* Content */}
           <div className={`flex min-h-screen w-full flex-col ${contentPadLeft}`}>
-            {/* Header (selaras dashboard) */}
+            {/* Header */}
             <header className="sticky top-0 z-20 border-b border-gray-100 bg-white/70 backdrop-blur">
               <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
                 <div className="flex items-center gap-2">
@@ -377,13 +485,10 @@ export default function AdminRequestsIndex() {
                 <div className="text-sm text-gray-600">
                   <span className="hidden sm:inline">Pantau permintaan servis, status, dan pembayaran.</span>
                 </div>
-                {/* Placeholder aksi tambahan (Export, dll) */}
-                <div className="hidden sm:flex items-center gap-2">
-                  {/* <button className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"><i className="fas fa-file-export" /> Export</button> */}
-                </div>
+                <div className="hidden sm:flex items-center gap-2">{/* extra actions here */}</div>
               </div>
 
-              {/* Filter (main pencarian) */}
+              {/* Filter */}
               <form onSubmit={submitFilter} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-6">
                   <div className="lg:col-span-2">
@@ -424,10 +529,8 @@ export default function AdminRequestsIndex() {
                       className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
                     >
                       <option value="">Semua</option>
-                      {cats.map((c) => (
-                        <option key={c.slug} value={c.slug}>
-                          {c.name}
-                        </option>
+                      {(categories && categories.length ? categories : DEFAULT_CATEGORIES).map((c) => (
+                        <option key={c.slug} value={c.slug}>{c.name}</option>
                       ))}
                     </select>
                   </div>
@@ -479,9 +582,7 @@ export default function AdminRequestsIndex() {
                     >
                       <option value="">Semua</option>
                       {(technicians ?? []).map((t) => (
-                        <option key={t.id} value={String(t.id)}>
-                          {t.name} — {t.email}
-                        </option>
+                        <option key={t.id} value={String(t.id)}>{t.name} — {t.email}</option>
                       ))}
                     </select>
                   </div>
@@ -495,9 +596,7 @@ export default function AdminRequestsIndex() {
                     >
                       <option value="">Semua</option>
                       {(users ?? []).map((u) => (
-                        <option key={u.id} value={String(u.id)}>
-                          {u.name} — {u.email}
-                        </option>
+                        <option key={u.id} value={String(u.id)}>{u.name} — {u.email}</option>
                       ))}
                     </select>
                   </div>
@@ -506,13 +605,13 @@ export default function AdminRequestsIndex() {
                 <div className="mt-3 flex gap-2">
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition-transform hover:bg-gray-50 hover:scale-[1.02] active:scale-95"
                   >
                     <i className="fas fa-filter" /> Terapkan
                   </button>
                   <Link
                     href="/admin/requests"
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition-transform hover:bg-gray-50 hover:scale-[1.02] active:scale-95"
                     preserveState
                     replace
                   >
@@ -568,16 +667,36 @@ export default function AdminRequestsIndex() {
                           <td className="py-2 pr-3">{fmtDateTime(r.scheduled_for)}</td>
                           <td className="py-2 pr-3">{r.accepted_price ? fmtPrice(r.accepted_price) : "-"}</td>
                           <td className="py-2 pr-3">
-                            <StatusBadge status={r.status} />
+                            <span
+                              className={[
+                                "inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-xs font-medium",
+                                STATUS_STYLES[r.status],
+                              ].join(" ")}
+                            >
+                              <i className="fas fa-circle text-[8px]" />
+                              {STATUS_LABELS[r.status] ?? r.status}
+                            </span>
                           </td>
                           <td className="py-2 pr-3">
-                            {r.payment ? <PayBadge status={r.payment.status} /> : <span className="text-gray-400">-</span>}
+                            {r.payment ? (
+                              <span
+                                className={[
+                                  "inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-xs font-medium",
+                                  PAY_STYLES[r.payment.status],
+                                ].join(" ")}
+                              >
+                                <i className="fas fa-receipt text-[10px]" />
+                                {PAY_LABELS[r.payment.status] ?? r.payment.status}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
                           </td>
                           <td className="py-2">
                             <div className="flex items-center justify-end gap-2">
                               <Link
                                 href={`/admin/requests/${r.id}`}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition-transform hover:bg-gray-50 hover:scale-[1.02] active:scale-95"
                               >
                                 <i className="fas fa-eye" /> Lihat
                               </Link>
@@ -595,6 +714,9 @@ export default function AdminRequestsIndex() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination di bawah tabel */}
+                {meta && <RequestsPagination meta={meta} filters={filters} />}
               </div>
             </main>
 

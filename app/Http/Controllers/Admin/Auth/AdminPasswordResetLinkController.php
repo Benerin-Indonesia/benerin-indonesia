@@ -2,28 +2,34 @@
 
 namespace App\Http\Controllers\Admin\Auth;
 
+use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
-use App\Http\Controllers\Controller;
+use Illuminate\Validation\ValidationException;
 
 class AdminPasswordResetLinkController extends Controller
 {
+    public function create()
+    {
+        // Tampilkan komponen Inertia/React: admin/forgot-password.tsx
+        return inertia('admin/forgot-password');
+    }
+
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'email' => ['required', 'email'],
-        ]);
+        $request->validate(['email' => ['required', 'email']]);
 
-        // Pastikan broker "admins" ada di config/auth.php (passwords)
-        $status = Password::broker('admins')->sendResetLink([
-            'email' => $validated['email'],
-        ]);
+        // Jika punya guard/broker khusus admin, ganti ke broker('admins')
+        $status = Password::broker('users')->sendResetLink(
+            $request->only('email')
+        );
 
         if ($status === Password::RESET_LINK_SENT) {
-            // Inertia akan dapat flash('status')
             return back()->with('status', __($status));
         }
 
-        return back()->withErrors(['email' => __($status)]);
+        throw ValidationException::withMessages([
+            'email' => [__($status)],
+        ]);
     }
 }

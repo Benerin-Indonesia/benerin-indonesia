@@ -31,7 +31,6 @@ class ChatMessageController extends Controller
                 'body' => $validated['body'],
             ]);
 
-            // di dalam blok try di ChatMessageController.php
             $message->load('sender');
 
             Log::info('BROADCAST MASUK UNTUK ORDER ID: ' . $message->service_request_id);

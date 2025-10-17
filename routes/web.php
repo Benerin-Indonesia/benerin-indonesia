@@ -11,6 +11,7 @@ use App\Http\Controllers\Auth\UserAuthController;
 use App\Http\Controllers\Auth\TechnicianAuthController;
 use App\Http\Controllers\Auth\AdminAuthController;
 use App\Http\Controllers\Admin\Auth\AdminPasswordResetLinkController;
+use App\Http\Controllers\Admin\Auth\AdminNewPasswordController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\TechnicianServiceController as AdminTechnicianServiceController;
@@ -21,15 +22,15 @@ use App\Http\Controllers\Admin\PayoutController as AdminPayoutController;
 use App\Http\Controllers\Admin\BalanceController as AdminBalanceController;
 
 // Fitur user & teknisi
-use App\Http\Controllers\User\userController;
-use App\Http\Controllers\Teknisi\TechnicianController;
-use App\Http\Controllers\ServiceRequest\Teknisi\ServiceRequestController as TechnicianServiceRequestController;
-use App\Http\Controllers\ServiceRequest\User\ServiceRequestController as UserServiceRequestController;
-use App\Http\Controllers\User\PaymentController;
 use App\Http\Controllers\Chat\ChatMessageController;
+use App\Http\Controllers\User\UserController;
+use App\Http\Controllers\User\PaymentController;
+use App\Http\Controllers\User\ProfileController;
+use App\Http\Controllers\Teknisi\TechnicianController;
 use App\Http\Controllers\Teknisi\PayoutController as TechnicianpayoutController;
 use App\Http\Controllers\Teknisi\ProfileController as TeknisiProfileController;
-use App\Http\Controllers\User\ProfileController;
+use App\Http\Controllers\ServiceRequest\Teknisi\ServiceRequestController as TechnicianServiceRequestController;
+use App\Http\Controllers\ServiceRequest\User\ServiceRequestController as UserServiceRequestController;
 
 /* -------------------- Public / Landing -------------------- */
 
@@ -59,7 +60,7 @@ Route::prefix('user')->name('user.')->group(function () {
     // ==== Middleware Hanya untuk user role ====
     Route::middleware(['auth', 'role:user'])->group(function () {
         // Home user
-        Route::get('/home', [userController::class, 'index'])->name('dashboard');
+        Route::get('/home', [UserController::class, 'index'])->name('dashboard');
 
         // Help page
         Route::get('/bantuan', function () {
@@ -80,9 +81,9 @@ Route::prefix('user')->name('user.')->group(function () {
         // Route::get('/wallet', [WalletController::class, 'indexUser'])->name('wallet');
 
         //Refund
-        Route::get('/refund', [userController::class, 'refundIndex'])->name('refund.index');
-        Route::get('/permintaan/{id}/refund', [userController::class, 'refundCreate'])->name('refund.create');
-        Route::post('/permintaan/refund', [userController::class, 'refundStore'])->name('refund.store')->middleware('throttle:permintaan-limit');
+        Route::get('/refund', [UserController::class, 'refundIndex'])->name('refund.index');
+        Route::get('/permintaan/{id}/refund', [UserController::class, 'refundCreate'])->name('refund.create');
+        Route::post('/permintaan/refund', [UserController::class, 'refundStore'])->name('refund.store')->middleware('throttle:permintaan-limit');
 
         // Service request user
         Route::get('/permintaan', [UserServiceRequestController::class, 'index'])->name('permintaan.index');
@@ -96,7 +97,7 @@ Route::prefix('user')->name('user.')->group(function () {
             ->name('permintaan.reject-price');
         Route::post('/permintaan/{id}/end', [UserServiceRequestController::class, 'endService'])
             ->name('permintaan.end-service');
-        Route::post('/permintaan/{id}/refund', [userController::class, 'refundCreate'])
+        Route::post('/permintaan/{id}/refund', [UserController::class, 'refundCreate'])
             ->name('permintaan.refund');
 
         // show all Categories
@@ -139,8 +140,8 @@ Route::prefix('teknisi')->name('teknisi.')->group(function () {
         Route::get('/home', [TechnicianController::class, 'index'])->name('dashboard');
 
         // Activity toggle
-        Route::post('/availability/toggle', [TechnicianController::class, 'toggleAvailability'])->name('teknisi.availability.toggle');
-        Route::post('/categories/toggle-status', [TechnicianController::class, 'toggleCategoryStatus'])->name('teknisi.categories.toggle');
+        Route::post('/availability/toggle', [TechnicianController::class, 'toggleAvailability'])->name('availability.toggle');
+        Route::post('/categories/toggle-status', [TechnicianController::class, 'toggleCategoryStatus'])->name('categories.toggle');
 
         //Profile
         Route::get('/profile', [TeknisiProfileController::class, 'index'])->name('profile');
@@ -178,42 +179,40 @@ Route::prefix('admin')->name('admin.')->group(function () {
     // - belum login -> redirect ke /admin/login
     Route::get('/', function () {
         if (Auth::check()) {
-            if (Auth::user()->role === 'admin') {
-                return redirect()->route('admin.dashboard');
-            }
-            return redirect()->route('dashboard');
+            return Auth::user()->role === 'admin'
+                ? redirect()->route('admin.dashboard')
+                : redirect()->route('dashboard');
         }
         return redirect()->route('admin.login.show');
     })->name('root');
 
-    Route::get('/login', function () {
+    Route::get('login', function () {
         if (Auth::check()) {
-            if (Auth::user()->role === 'admin') {
-                return redirect()->route('admin.dashboard');
-            }
-            return redirect()->route('dashboard');
+            return Auth::user()->role === 'admin'
+                ? redirect()->route('admin.dashboard')
+                : redirect()->route('dashboard');
         }
-
         return app(AdminAuthController::class)->showLoginForm();
     })->name('login.show');
 
     Route::post('/login', [AdminAuthController::class, 'login'])->name('login');
 
-    Route::get('/forgot-password', fn() => Inertia::render('admin/forgot-password'))
+    // Admin Forgot/Reset Password (khusus admin)
+    Route::get('forgot-password', fn() => Inertia::render('admin/forgot-password'))
         ->name('password.request');
-    Route::post('/forgot-password', [AdminPasswordResetLinkController::class, 'store'])
+    Route::post('forgot-password', [AdminPasswordResetLinkController::class, 'store'])
         ->name('password.email');
 
-    Route::get('/reset-password/{token}', function (string $token) {
-        return redirect()->route('admin.password.request')
-            ->with('status', 'Tautan reset diterima. Silakan ikuti instruksi di email untuk menyetel ulang password.');
-    })->name('password.reset');
+    Route::get('reset-password/{token}', [AdminNewPasswordController::class, 'create'])
+        ->name('password.reset');
+    Route::post('reset-password', [AdminNewPasswordController::class, 'store'])
+        ->name('password.update');
 });
 
 /* -------------------- ADMIN Panel (proteksi ensure_admin) -------------------- */
 Route::prefix('admin')
     ->name('admin.')
-    ->middleware('ensure_admin')
+    ->middleware(['auth', 'ensure_admin'])
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -248,19 +247,22 @@ Route::prefix('admin')
             ->only(['index', 'show'])
             ->parameters(['payouts' => 'id']);
 
-        Route::resource('balances', AdminbalanceController::class)
+        Route::resource('balances', AdminBalanceController::class)
             ->only(['index'])
             ->parameters(['balances' => 'id']);
     });
 
+
 /* -------------------- Shortcut /dashboard -------------------- */
 Route::get('/dashboard', function () {
     $user = Auth::user();
-    if (!$user) return redirect()->route('login.choice');
+    if (!$user) {
+        return redirect()->route('login.choice');
+    }
 
     return match ($user->role) {
-        'teknisi' => redirect()->route('teknisi.dashboard'),
         'admin'   => redirect()->route('admin.dashboard'),
+        'teknisi' => redirect()->route('teknisi.dashboard'),
         default   => redirect()->route('user.dashboard'),
     };
-})->name('dashboard');
+})->middleware('auth')->name('dashboard');

@@ -14,7 +14,7 @@ class UserAuthController extends Controller
 {
     public function showLoginForm()
     {
-        return Inertia::render('user/login'); // resources/js/Pages/user/login.tsx
+        return Inertia::render('user/login');
     }
 
     public function login(Request $request)
@@ -36,12 +36,12 @@ class UserAuthController extends Controller
         }
 
         $request->session()->regenerate();
-        return redirect()->intended('/user/home'); // ubah sesuai rute dashboard user
+        return redirect()->intended('/user/home');
     }
 
     public function showRegisterForm()
     {
-        return Inertia::render('user/register'); // resources/js/Pages/user/register.tsx
+        return Inertia::render('user/register');
     }
 
     public function register(Request $request)
@@ -49,7 +49,7 @@ class UserAuthController extends Controller
         $data = $request->validate([
             'name'     => ['required', 'string', 'max:255'],
             'email'    => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
-            'password' => ['required', 'string', 'min:8'], // tambahkan 'confirmed' kalau di UI ada konfirmasi
+            'password' => ['required', 'string', 'min:8'],
         ]);
 
         $user = User::create([
@@ -62,7 +62,7 @@ class UserAuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->intended('/user/home'); // ubah sesuai rute dashboard user
+        return redirect()->intended('/user/home');
     }
 
     public function logout(Request $request)

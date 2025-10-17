@@ -17,12 +17,21 @@ type User = {
   account_number?: string | null;
 };
 
-type PaginatedUsers = { data: User[] };
+type PaginationLink = { url: string | null; label: string; active: boolean };
+
+type Paginated<T> = {
+  data: T[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  links?: PaginationLink[];
+};
 
 type PageProps = {
   auth?: { user?: { name?: string } };
-  users?: PaginatedUsers | User[];
-  filters?: { q?: string; role?: string };
+  users?: Paginated<User> | User[];
+  filters?: { q?: string; role?: string; perPage?: number };
 };
 
 const ROLE_LABEL: Record<Role, string> = {
@@ -31,23 +40,15 @@ const ROLE_LABEL: Record<Role, string> = {
   admin: "Admin",
 };
 
-function isPaginatedUsers(u: PageProps["users"]): u is PaginatedUsers {
-  return typeof u === "object" && u !== null && !Array.isArray(u) && Array.isArray((u as PaginatedUsers).data);
+function isPaginatedUsers(u: PageProps["users"]): u is Paginated<User> {
+  return (
+    typeof u === "object" &&
+    u !== null &&
+    !Array.isArray(u) &&
+    Array.isArray((u as Paginated<User>).data) &&
+    typeof (u as Paginated<User>).current_page === "number"
+  );
 }
-
-/* =========================================
-   Sidebar Nav (selaras dashboard)
-========================================= */
-const NAV = [
-  { href: "/admin/dashboard", icon: "fa-tachometer-alt", label: "Dashboard" },
-  { href: "/admin/requests", icon: "fa-clipboard-list", label: "Permintaan Servis" },
-  { href: "/admin/payments", icon: "fa-receipt", label: "Pembayaran" },
-  { href: "/admin/payouts", icon: "fa-hand-holding-usd", label: "Pencairan Dana" },
-  { href: "/admin/balances", icon: "fa-balance-scale", label: "Saldo" },
-  { href: "/admin/users", icon: "fa-users", label: "Users" },
-  { href: "/admin/technician-services", icon: "fa-tools", label: "Layanan Teknisi" },
-  { href: "/admin/categories", icon: "fa-tags", label: "Kategori" },
-];
 
 /* =========================================
    Small UI building blocks
@@ -59,7 +60,11 @@ function RoleBadge({ role }: { role: Role }) {
       : role === "teknisi"
         ? "bg-blue-50 text-blue-700"
         : "bg-gray-100 text-gray-700";
-  return <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${cls}`}>{ROLE_LABEL[role]}</span>;
+  return (
+    <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${cls}`}>
+      {ROLE_LABEL[role]}
+    </span>
+  );
 }
 
 function Modal({
@@ -107,6 +112,139 @@ function Modal({
         </div>
       </div>
     </div>
+  );
+}
+
+/* =========================================
+   Pagination (bawah tabel, gaya Filament)
+========================================= */
+function Pagination({
+  meta,
+  filters,
+}: {
+  meta: Pick<Paginated<User>, "current_page" | "last_page" | "per_page" | "total">;
+  filters?: { q?: string; role?: string; perPage?: number };
+}) {
+  if (!meta || meta.last_page <= 1) return null;
+
+  const goTo = (page: number, perPage = meta.per_page) => {
+    const params: Record<string, string | number> = { page, perPage };
+    if (filters?.q) params.q = filters.q;
+    if (filters?.role) params.role = filters.role;
+    router.get("/admin/users", params, { preserveScroll: true, preserveState: true });
+  };
+
+  const changePerPage = (pp: number) => {
+    const params: Record<string, string | number> = { page: 1, perPage: pp };
+    if (filters?.q) params.q = filters.q;
+    if (filters?.role) params.role = filters.role;
+    router.get("/admin/users", params, { preserveScroll: true, preserveState: true });
+  };
+
+  // Buat daftar halaman ala Filament: 1 … (cur-2..cur+2) … last
+  const pages: Array<number | string> = (() => {
+    const total = meta.last_page;
+    const cur = meta.current_page;
+    const delta = 2;
+    const arr: number[] = [1];
+    for (let i = cur - delta; i <= cur + delta; i++) {
+      if (i > 1 && i < total) arr.push(i);
+    }
+    if (total > 1) arr.push(total);
+    const out: Array<number | string> = [];
+    let prev: number | null = null;
+    for (const n of [...new Set(arr)].sort((a, b) => a - b)) {
+      if (prev !== null) {
+        if (n - prev === 2) out.push(prev + 1);
+        else if (n - prev > 2) out.push("…");
+      }
+      out.push(n);
+      prev = n;
+    }
+    return out;
+  })();
+
+  const from = meta.total === 0 ? 0 : (meta.current_page - 1) * meta.per_page + 1;
+  const to = Math.min(meta.current_page * meta.per_page, meta.total);
+
+  return (
+    <nav className="mt-4 flex flex-col items-stretch gap-3 rounded-xl border border-gray-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="text-xs text-gray-500">
+        Menampilkan <span className="font-medium text-gray-700">{from}</span> –
+        <span className="font-medium text-gray-700"> {to} </span> dari{" "}
+        <span className="font-medium text-gray-700">{meta.total}</span> data
+      </div>
+
+      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+        {/* Per page */}
+        <div className="inline-flex items-center gap-2">
+          <select
+            value={meta.per_page}
+            onChange={(e) => changePerPage(Number(e.target.value))}
+            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-800"
+            aria-label="Jumlah data per halaman"
+          >
+            {[10, 20, 50, 100].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-gray-500">per page</span>
+        </div>
+
+        {/* Pager */}
+        <ul className="inline-flex select-none items-center gap-1">
+          <li>
+            <button
+              type="button"
+              disabled={meta.current_page <= 1}
+              onClick={() => goTo(meta.current_page - 1)}
+              className="min-w-[2.25rem] rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50 disabled:text-gray-300"
+              aria-label="Sebelumnya"
+            >
+              ‹
+            </button>
+          </li>
+
+          {pages.map((p, i) =>
+            p === "…" ? (
+              <li key={`dots-${i}`} className="px-2 text-sm text-gray-400">
+                …
+              </li>
+            ) : (
+              <li key={`p-${p}`}>
+                <button
+                  type="button"
+                  aria-current={p === meta.current_page ? "page" : undefined}
+                  onClick={() => goTo(p as number)}
+                  className={[
+                    "min-w-[2.25rem] rounded-lg border px-3 py-1.5 text-sm transition",
+                    p === meta.current_page
+                      ? "border-gray-900 bg-gray-900 text-white"
+                      : "border-gray-200 text-gray-700 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  {p}
+                </button>
+              </li>
+            )
+          )}
+
+          <li>
+            <button
+              type="button"
+              disabled={meta.current_page >= meta.last_page}
+              onClick={() => goTo(meta.current_page + 1)}
+              className="min-w-[2.25rem] rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50 disabled:text-gray-300"
+              aria-label="Berikutnya"
+            >
+              ›
+            </button>
+          </li>
+        </ul>
+      </div>
+    </nav>
   );
 }
 
@@ -267,7 +405,13 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
         <button
           type="submit"
           disabled={form.processing}
-          className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110"
+          className={[
+            "inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5",
+            "text-sm font-semibold text-white shadow-sm",
+            "transition-transform duration-150 ease-out",
+            "hover:scale-[1.02] active:scale-95 hover:brightness-110",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+          ].join(" ")}
         >
           {form.processing ? (
             <>
@@ -335,7 +479,10 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
         <button
           type="button"
           onClick={onDelete}
-          className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+          className={[
+            "inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700",
+            "transition-transform duration-150 ease-out hover:scale-[1.02] active:scale-95 hover:bg-red-50",
+          ].join(" ")}
         >
           <i className="fas fa-trash" /> Hapus
         </button>
@@ -458,7 +605,13 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
         <button
           type="submit"
           disabled={form.processing}
-          className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110"
+          className={[
+            "inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5",
+            "text-sm font-semibold text-white shadow-sm",
+            "transition-transform duration-150 ease-out",
+            "hover:scale-[1.02] active:scale-95 hover:brightness-110",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+          ].join(" ")}
         >
           {form.processing ? (
             <>
@@ -480,14 +633,14 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
 ========================================= */
 export default function AdminUsersIndex() {
   const page = usePage<PageProps>();
-  const currentUrl = page.url; // tanpa any
+  const currentUrl = page.url;
   const { auth, users, filters } = page.props;
 
-  // Sidebar states (serupa dashboard)
+  // Sidebar states
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Modal states
+  // Modals
   const [openCreate, setOpenCreate] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
 
@@ -498,10 +651,11 @@ export default function AdminUsersIndex() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Data
+  // Data list
   const items: User[] = useMemo(() => {
     if (Array.isArray(users)) return users;
     if (isPaginatedUsers(users)) return users.data;
+    // fallback sample
     return [
       { id: 1, name: "Agus Saputra", email: "agus@example.com", role: "user", phone: "0812-1111-2222" },
       { id: 2, name: "Nina Rahma", email: "nina@example.com", role: "teknisi", phone: "0813-3333-4444" },
@@ -509,14 +663,28 @@ export default function AdminUsersIndex() {
     ];
   }, [users]);
 
-  // Filters (main pencarian)
-  const filterForm = useForm({ q: filters?.q ?? "", role: filters?.role ?? "" });
+  // Meta pagination
+  const meta = useMemo(() => {
+    if (!isPaginatedUsers(users)) return null;
+    const { current_page, last_page, per_page, total } = users;
+    return { current_page, last_page, per_page, total };
+  }, [users]);
+
+  // Filters (pencarian)
+  const filterForm = useForm({
+    q: filters?.q ?? "",
+    role: filters?.role ?? "",
+  });
   const submitFilter: React.FormEventHandler = (e) => {
     e.preventDefault();
-    router.get("/admin/users", filterForm.data, { preserveState: true, replace: true });
+    router.get(
+      "/admin/users",
+      { ...filterForm.data, perPage: filters?.perPage ?? meta?.per_page ?? 10 },
+      { preserveState: true, replace: true }
+    );
   };
 
-  // Delete
+  // Delete row
   const delForm = useForm({});
   const onDeleteRow = (u: User) => {
     if (!confirm(`Hapus user "${u.name}"?`)) return;
@@ -578,7 +746,16 @@ export default function AdminUsersIndex() {
             </div>
 
             <nav className="space-y-1">
-              {NAV.map((it) => {
+              {[
+                { href: "/admin/dashboard", icon: "fa-tachometer-alt", label: "Dashboard" },
+                { href: "/admin/requests", icon: "fa-clipboard-list", label: "Permintaan Servis" },
+                { href: "/admin/payments", icon: "fa-receipt", label: "Pembayaran" },
+                { href: "/admin/payouts", icon: "fa-hand-holding-usd", label: "Pencairan Dana" },
+                { href: "/admin/balances", icon: "fa-balance-scale", label: "Saldo" },
+                { href: "/admin/users", icon: "fa-users", label: "Users" },
+                { href: "/admin/technician-services", icon: "fa-tools", label: "Layanan Teknisi" },
+                { href: "/admin/categories", icon: "fa-tags", label: "Kategori" },
+              ].map((it) => {
                 const active = isActive(it.href);
                 return (
                   <Link
@@ -600,7 +777,7 @@ export default function AdminUsersIndex() {
             <div className="mt-auto">
               {/* Tombol Logout (POST Inertia) */}
               <Link
-                href="/admin/logout"       // ganti ke "/logout" jika pakai route default Laravel
+                href="/admin/logout"
                 method="post"
                 as="button"
                 className={[
@@ -626,7 +803,7 @@ export default function AdminUsersIndex() {
 
           {/* Content */}
           <div className={`flex min-h-screen w-full flex-col ${contentPadLeft}`}>
-            {/* Header (selaras dashboard) */}
+            {/* Header */}
             <header className="sticky top-0 z-20 border-b border-gray-100 bg-white/70 backdrop-blur">
               <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
                 <div className="flex items-center gap-2">
@@ -651,6 +828,7 @@ export default function AdminUsersIndex() {
                         type="text"
                         placeholder="Cari…"
                         className="w-56 rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-gray-900/20"
+                        readOnly
                       />
                     </div>
                   </div>
@@ -670,21 +848,26 @@ export default function AdminUsersIndex() {
 
             {/* Main */}
             <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-              {/* Actions (di atas main pencarian) */}
+              {/* Actions */}
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-sm text-gray-600">
                   <span className="hidden sm:inline">Kelola data pengguna sistem.</span>
                 </div>
                 <button
                   onClick={() => setOpenCreate(true)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110"
+                  className={[
+                    "inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5",
+                    "text-sm font-semibold text-white shadow-sm",
+                    "transition-transform duration-150 ease-out",
+                    "hover:scale-[1.02] active:scale-95 hover:brightness-110",
+                  ].join(" ")}
                 >
                   <i className="fas fa-user-plus" />
                   Tambah User
                 </button>
               </div>
 
-              {/* Filter (main pencarian) */}
+              {/* Filter */}
               <form onSubmit={submitFilter} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div className="sm:col-span-2">
@@ -717,13 +900,13 @@ export default function AdminUsersIndex() {
                 <div className="mt-3 flex gap-2">
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition hover:bg-gray-50"
                   >
                     <i className="fas fa-filter" /> Terapkan
                   </button>
                   <Link
                     href="/admin/users"
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition hover:bg-gray-50"
                     preserveState
                     replace
                   >
@@ -759,14 +942,14 @@ export default function AdminUsersIndex() {
                               <button
                                 type="button"
                                 onClick={() => setEditUser(u)}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:scale-[1.02] hover:bg-gray-50 active:scale-95"
                               >
                                 <i className="fas fa-edit" /> Edit
                               </button>
                               <button
                                 type="button"
                                 onClick={() => onDeleteRow(u)}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:scale-[1.02] hover:bg-red-50 active:scale-95"
                               >
                                 <i className="fas fa-trash" /> Hapus
                               </button>
@@ -784,6 +967,9 @@ export default function AdminUsersIndex() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination di bawah tabel */}
+                {meta && <Pagination meta={meta} filters={filters} />}
               </div>
             </main>
 

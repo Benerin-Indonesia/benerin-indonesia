@@ -18,7 +18,6 @@ Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 });
 
-// PASTIKAN BLOK INI ADA DAN BENAR
 Broadcast::channel('chat.{serviceRequestId}', function ($user, $serviceRequestId) {
     $serviceRequest = ServiceRequest::find($serviceRequestId);
     if ($serviceRequest) {

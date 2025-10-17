@@ -5,6 +5,7 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Auth\Notifications\ResetPassword;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -33,6 +34,11 @@ class AppServiceProvider extends ServiceProvider
                     'photo' => $user->photo,
                 ] : null,
             ];
+        });
+
+        ResetPassword::createUrlUsing(function ($notifiable, string $token) {
+            // arahkan ke halaman reset password versi admin
+            return url(route('admin.password.reset', ['token' => $token, 'email' => $notifiable->getEmailForPasswordReset()], false));
         });
     }
 }

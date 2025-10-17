@@ -81,6 +81,14 @@ type PageProps = {
   refunds?: RefundLite[] | null;
 };
 
+function storageUrl(path?: string | null): string {
+  if (!path) return "";
+  if (/^https?:\/\//i.test(path)) return path;
+
+  const clean = path.replace(/^public\//, "").replace(/^\//, "");
+  return clean.startsWith("storage/") ? `/${clean}` : `/storage/${clean}`;
+}
+
 /* =========================================
    Helpers & formatters
 ========================================= */
@@ -132,6 +140,7 @@ function StatusBadge({ status }: { status: Status }) {
     </span>
   );
 }
+
 function PayBadge({ status }: { status: PayStatus }) {
   const map: Record<PayStatus, string> = {
     pending: "bg-gray-100 text-gray-700 border-gray-200",
@@ -166,39 +175,89 @@ const NAV = [
 ========================================= */
 const TIMELINE_ORDER: Status[] = ["menunggu", "dijadwalkan", "diproses", "selesai", "dibatalkan"];
 
-function Timeline({ current, createdAt, scheduledFor, paidAt }: { current: Status; createdAt?: string; scheduledFor?: string | null; paidAt?: string | null; }) {
-  // sederhana: highlight hingga current; tampilkan waktu relevan
-  const stepIcon = (s: Status, active: boolean) =>
-    <span className={`grid h-6 w-6 place-items-center rounded-full ${active ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500"}`}>
-      <i className={`fas ${s === "selesai" ? "fa-check" : s === "dibatalkan" ? "fa-times" : "fa-circle"}`} />
-    </span>;
-
-  const untilCurrent = useMemo(() => {
-    const idx = TIMELINE_ORDER.indexOf(current);
-    return TIMELINE_ORDER.map((s, i) => ({ s, active: i <= idx && !(current === "dibatalkan" && s === "selesai") }));
-  }, [current]);
-
+function Timeline({
+  current,
+  createdAt,
+  scheduledFor,
+  paidAt,
+}: {
+  current: Status;
+  createdAt?: string;
+  scheduledFor?: string | null;
+  paidAt?: string | null;
+}) {
   const whenText = (s: Status) => {
     switch (s) {
-      case "menunggu": return fmtDateTime(createdAt);
-      case "dijadwalkan": return fmtDateTime(scheduledFor ?? undefined);
-      case "diproses": return paidAt ? `dibayar: ${fmtDateTime(paidAt)}` : "-";
-      case "selesai": return "-";
-      case "dibatalkan": return "-";
+      case "menunggu":
+        return fmtDateTime(createdAt);
+      case "dijadwalkan":
+        return fmtDateTime(scheduledFor ?? undefined);
+      case "diproses":
+        return paidAt ? `dibayar: ${fmtDateTime(paidAt)}` : "-";
+      case "selesai":
+      case "dibatalkan":
+        return "-";
     }
   };
 
+  const iconOf = (s: Status) =>
+    s === "menunggu"
+      ? "fa-clock"
+      : s === "dijadwalkan"
+      ? "fa-calendar-alt"
+      : s === "diproses"
+      ? "fa-tools"
+      : s === "selesai"
+      ? "fa-check"
+      : "fa-ban";
+
+  const curIdx = TIMELINE_ORDER.indexOf(current);
+
   return (
-    <ol className="space-y-3">
-      {untilCurrent.map(({ s, active }) => (
-        <li key={s} className="flex items-start gap-3">
-          {stepIcon(s, active)}
-          <div>
-            <div className={`text-sm font-semibold ${active ? "text-gray-900" : "text-gray-500"}`}>{s}</div>
+    <ol className="relative ml-3">
+      {TIMELINE_ORDER.map((s, i) => {
+        // state langkah
+        let state: "done" | "current" | "upcoming" | "cancelled" =
+          i < curIdx ? "done" : i === curIdx ? "current" : "upcoming";
+        if (current === "dibatalkan") state = s === "dibatalkan" ? "cancelled" : i < curIdx ? "upcoming" : "upcoming";
+
+        const circleCls =
+          state === "done"
+            ? "bg-emerald-600 text-white"
+            : state === "current"
+            ? "bg-indigo-600 text-white"
+            : state === "cancelled"
+            ? "bg-rose-600 text-white"
+            : "bg-gray-200 text-gray-500";
+
+        const lineCls =
+          i < TIMELINE_ORDER.length - 1
+            ? state === "done"
+              ? "bg-emerald-200"
+              : state === "cancelled"
+              ? "bg-rose-200"
+              : "bg-gray-200"
+            : "";
+
+        return (
+          <li key={s} className="relative pb-5 pl-9">
+            {/* bullet */}
+            <span className={`absolute left-0 top-0 grid h-7 w-7 place-items-center rounded-full ${circleCls}`}>
+              <i className={`fas ${iconOf(s)}`} />
+            </span>
+
+            {/* connector */}
+            {i < TIMELINE_ORDER.length - 1 && (
+              <span className={`absolute left-[13px] top-7 bottom-0 w-0.5 ${lineCls}`} />
+            )}
+
+            <div className="text-sm font-semibold capitalize">
+              {s}
+            </div>
             <div className="text-xs text-gray-500">{whenText(s)}</div>
-          </div>
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -496,22 +555,25 @@ export default function AdminRequestShow() {
                       <div className="text-sm text-gray-500">Tidak ada foto.</div>
                     ) : (
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                        {photos.map((p) => (
-                          <a
-                            key={p.id}
-                            href={p.path}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="group block overflow-hidden rounded-xl border border-gray-100"
-                            title="Buka gambar"
-                          >
-                            <img
-                              src={p.path}
-                              alt="Foto permintaan"
-                              className="h-28 w-full object-cover transition group-hover:scale-[1.02]"
-                            />
-                          </a>
-                        ))}
+                        {photos.map((p) => {
+                          const url = storageUrl(p.path);
+                          return (
+                            <a
+                              key={p.id}
+                              href={url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="group block overflow-hidden rounded-xl border border-gray-100"
+                              title="Buka gambar"
+                            >
+                              <img
+                                src={url}
+                                alt="Foto permintaan"
+                                className="h-28 w-full object-cover transition group-hover:scale-[1.02]"
+                              />
+                            </a>
+                          );
+                        })}
                       </div>
                     )}
                   </section>

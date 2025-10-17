@@ -1,8 +1,10 @@
-import React, { useState } from "react";
-import { Head, useForm, Link } from "@inertiajs/react";
+import React, { useEffect, useState } from "react";
+import { Head, useForm, Link, usePage } from "@inertiajs/react";
 
-const ACCENT = "#111827"; // abu-abu tua (nuansa admin)
+const ACCENT = "#111827";
 const HINT = "#6B7280";
+
+type PageProps = { flash?: { status?: string; success?: string; error?: string } };
 
 export default function AdminLogin() {
   const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
@@ -11,7 +13,31 @@ export default function AdminLogin() {
     remember: false,
   });
 
+  const { flash } = usePage<PageProps>().props;
+  const flashMessage = flash?.status || flash?.success || null;
+  const flashError = flash?.error || null;
+
   const [showPassword, setShowPassword] = useState(false);
+  const [toast, setToast] = useState<{
+    visible: boolean;
+    text: string;
+    variant: "success" | "error";
+  }>({
+    visible: !!(flashMessage || flashError),
+    text: flashMessage || flashError || "",
+    variant: flashMessage ? "success" : "error",
+  });
+
+  useEffect(() => {
+    const text = flashMessage ?? flashError;
+    const variant = (flashMessage ? "success" : "error") as "success" | "error";
+
+    if (!text) return;
+    setToast({ visible: true, text, variant });
+
+    const t = setTimeout(() => setToast((s) => ({ ...s, visible: false })), 4500);
+    return () => clearTimeout(t);
+  }, [flashMessage, flashError]);
 
   const submit: React.FormEventHandler = (e) => {
     e.preventDefault();
@@ -27,10 +53,54 @@ export default function AdminLogin() {
       <style>{`
         :root { --accent: ${ACCENT}; --hint: ${HINT}; --ease: cubic-bezier(.22,.8,.28,1); }
         @keyframes float { 0%{transform:translateY(0)}50%{transform:translateY(-6px)}100%{transform:translateY(0)} }
+        @keyframes shrink { from{transform:scaleX(1)} to{transform:scaleX(0)} }
         .blob { filter: blur(56px); opacity:.14; }
         .float-slow { animation: float 12s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) { .float-slow { animation: none !important; } }
       `}</style>
+
+      {/* Toast Notifikasi */}
+      {toast.visible && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed right-4 top-4 z-50 w-[clamp(260px,40vw,360px)] overflow-hidden rounded-xl border bg-white shadow-lg
+            ${toast.variant === "success" ? "border-green-200" : "border-red-200"}`}
+        >
+          <div className="flex items-start gap-3 px-4 py-3">
+            <span
+              className={`mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full
+                ${toast.variant === "success" ? "bg-green-100" : "bg-red-100"}`}
+            >
+              <i
+                className={`fas ${toast.variant === "success" ? "fa-check text-green-600" : "fa-times text-red-600"} text-[11px]`}
+                aria-hidden="true"
+              />
+            </span>
+            <div className="min-w-0 grow">
+              <p className="truncate text-sm font-medium text-gray-900">
+                {toast.variant === "success" ? "Berhasil" : "Gagal"}
+              </p>
+              <p className="mt-0.5 line-clamp-2 text-xs text-gray-600">{toast.text}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setToast((s) => ({ ...s, visible: false }))}
+              className="ml-2 inline-flex rounded-md p-1.5 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+              aria-label="Tutup notifikasi"
+            >
+              <i className="fas fa-times text-[12px]" />
+            </button>
+          </div>
+          <div className={`h-0.5 w-full ${toast.variant === "success" ? "bg-green-100" : "bg-red-100"}`}>
+            <div
+              className={`h-full w-full origin-left animate-[shrink_4.5s_linear_forwards] ${
+                toast.variant === "success" ? "bg-green-500/60" : "bg-red-500/60"
+              }`}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="relative min-h-[100svh] overflow-hidden bg-white">
         {/* Dekorasi lembut, netral untuk admin */}
@@ -44,9 +114,7 @@ export default function AdminLogin() {
           <div className="mx-auto max-w-md text-center">
             <img src="/storage/assets/logo.png" alt="Benerin Indonesia" className="mx-auto h-10 w-auto sm:h-12" />
             <h1 className="mt-4 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Login Admin</h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Akses terbatas. Gunakan kredensial admin Anda.
-            </p>
+            <p className="mt-2 text-sm text-gray-600">Akses terbatas. Gunakan kredensial admin Anda.</p>
           </div>
 
           {/* Card putih, tanpa gradasi */}
@@ -158,9 +226,7 @@ export default function AdminLogin() {
               {/* Info keamanan */}
               <div className="mt-6 flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs text-gray-600">
                 <i className="fas fa-info-circle mt-0.5 text-[--hint]" aria-hidden="true" />
-                <p>
-                  Untuk keamanan, jangan bagikan kredensial admin. Akses ini tidak ditampilkan di halaman publik.
-                </p>
+                <p>Untuk keamanan, jangan bagikan kredensial admin. Akses ini tidak ditampilkan di halaman publik.</p>
               </div>
 
               {/* Kembali ke beranda */}

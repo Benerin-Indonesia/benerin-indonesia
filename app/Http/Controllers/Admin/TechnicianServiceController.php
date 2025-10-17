@@ -31,33 +31,37 @@ class TechnicianServiceController extends Controller
                 $term = '%' . str_replace(' ', '%', $filters['q']) . '%';
                 $q->whereHas('technician', function ($t) use ($term) {
                     $t->where('name', 'like', $term)
-                      ->orWhere('email', 'like', $term);
+                        ->orWhere('email', 'like', $term);
                 });
             })
-            ->when($filters['category'] !== '', fn ($q) => $q->where('category', $filters['category']))
+            ->when($filters['category'] !== '', fn($q) => $q->where('category', $filters['category']))
             ->when($filters['active'] !== '', function ($q) use ($filters) {
                 // '1' -> true, '0' -> false
                 $q->where('active', $filters['active'] === '1');
             })
             ->orderByDesc('id');
 
-        // Paginate ringan; frontend siap menelan { data: [] }
-        $services = $query->paginate(20)->through(function (TechnicianService $s) {
-            return [
-                'id'             => $s->id,
-                'technician_id'  => $s->technician_id,
-                'category'       => $s->category,
-                'active'         => (bool) $s->active,
-                'technician'     => $s->technician
-                    ? [
-                        'id'    => $s->technician->id,
-                        'name'  => $s->technician->name,
+        $perPage = (int) $request->input('perPage', 10);
+        $perPage = max(1, min(100, $perPage));
+
+        $services = $query
+            ->orderBy('id', 'desc')
+            ->paginate($perPage)
+            ->through(function ($s) {
+                return [
+                    'id' => $s->id,
+                    'technician_id' => $s->technician_id,
+                    'category' => $s->category,
+                    'active' => (bool) $s->active,
+                    'technician' => $s->technician ? [
+                        'id' => $s->technician->id,
+                        'name' => $s->technician->name,
                         'email' => $s->technician->email,
                         'phone' => $s->technician->phone,
-                    ]
-                    : null,
-            ];
-        });
+                    ] : null,
+                ];
+            });
+
 
         // Dropdown teknisi (hanya role=teknisi)
         $technicians = User::query()
@@ -193,7 +197,7 @@ class TechnicianServiceController extends Controller
             return DB::table('categories')
                 ->orderBy('name')
                 ->get(['slug', 'name'])
-                ->map(fn ($r) => ['slug' => $r->slug, 'name' => $r->name])
+                ->map(fn($r) => ['slug' => $r->slug, 'name' => $r->name])
                 ->toArray();
         }
 
