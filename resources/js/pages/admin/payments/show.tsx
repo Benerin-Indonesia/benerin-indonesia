@@ -170,7 +170,7 @@ export default function AdminPaymentShow() {
 
   return (
     <>
-      <Head title={`Payment #${payment.id} — Admin`} />
+      <Head title={`Pembayaran #${payment.id}`} />
       <div className="min-h-screen bg-gray-50">
         <div className="flex">
           {/* Overlay mobile */}

@@ -201,9 +201,20 @@ export default function AdminPaymentsIndex() {
   const sideWidth = sidebarCollapsed ? "md:w-20" : "md:w-72";
   const contentPadLeft = sidebarCollapsed ? "md:pl-20" : "md:pl-72";
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const doRefresh = () => {
+    setRefreshing(true);
+    router.reload({
+      only: ["payments"],
+      onFinish: () => setRefreshing(false),
+      onError: () => setRefreshing(false),
+    });
+  };
+
   return (
     <>
-      <Head title="Payments — Admin" />
+      <Head title="Pembayaran" />
       <div className="min-h-screen bg-gray-50">
         <div className="flex">
           {/* Overlay mobile */}
@@ -267,7 +278,7 @@ export default function AdminPaymentsIndex() {
             <div className="mt-auto">
               {/* Tombol Logout (POST Inertia) */}
               <Link
-                href="/admin/logout"       // ganti ke "/logout" jika pakai route default Laravel
+                href="/admin/logout"
                 method="post"
                 as="button"
                 className={[
@@ -311,23 +322,25 @@ export default function AdminPaymentsIndex() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <div className="hidden sm:block">
-                    <div className="relative">
-                      <i className="fas fa-search pointer-events-none absolute left-3 top-2.5 text-sm text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Cari…"
-                        className="w-56 rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-gray-900/20"
-                        readOnly
-                      />
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={doRefresh}
+                      disabled={refreshing}
+                      aria-busy={refreshing}
+                      className={[
+                        "inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2",
+                        "text-sm font-semibold text-gray-700 hover:bg-gray-50",
+                        refreshing ? "opacity-60 cursor-not-allowed" : ""
+                      ].join(" ")}
+                      title="Muat ulang data pembayaran"
+                    >
+                      <i className={["fas", "fa-sync-alt", refreshing ? "animate-spin" : ""].join(" ")} />
+                      {refreshing ? "Menyegarkan…" : "Refresh"}
+                    </button>
+
                   </div>
-                  <Link
-                    href="/"
-                    className="hidden items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 sm:flex"
-                  >
-                    <i className="fas fa-globe-asia" /> Lihat Situs
-                  </Link>
+
                   <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-2.5 py-1.5">
                     <i className="fas fa-user-shield text-gray-500" />
                     <span className="text-sm text-gray-800">{auth?.user?.name ?? "Admin"}</span>
@@ -342,17 +355,6 @@ export default function AdminPaymentsIndex() {
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-sm text-gray-600">
                   <span className="hidden sm:inline">Kelola dan pantau transaksi pembayaran (Midtrans, dsb).</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => router.reload({ only: ["payments"] })}
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                  >
-                    <i className="fas fa-sync-alt" /> Refresh
-                  </button>
-                  {/* Placeholder bila nanti perlu export */}
-                  {/* <button className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"><i className="fas fa-file-export" /> Export</button> */}
                 </div>
               </div>
 

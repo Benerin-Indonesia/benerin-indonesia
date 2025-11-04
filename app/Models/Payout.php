@@ -26,6 +26,7 @@ class Payout extends Model
         'account_number',
         'paid_at',
         'note',
+        'transfer_receipt_path',
     ];
 
     protected $casts = [

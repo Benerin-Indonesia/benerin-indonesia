@@ -15,7 +15,6 @@ class TechnicianServiceController extends Controller
 {
     /**
      * GET /admin/technician-services
-     * Props yang dikirim: services (paginated), technicians (dropdown), categories (dropdown), filters.
      */
     public function index(Request $request)
     {
@@ -36,16 +35,13 @@ class TechnicianServiceController extends Controller
             })
             ->when($filters['category'] !== '', fn($q) => $q->where('category', $filters['category']))
             ->when($filters['active'] !== '', function ($q) use ($filters) {
-                // '1' -> true, '0' -> false
                 $q->where('active', $filters['active'] === '1');
             })
             ->orderByDesc('id');
 
-        $perPage = (int) $request->input('perPage', 10);
-        $perPage = max(1, min(100, $perPage));
+        $perPage = max(1, min(100, (int) $request->input('perPage', 10)));
 
         $services = $query
-            ->orderBy('id', 'desc')
             ->paginate($perPage)
             ->through(function ($s) {
                 return [
@@ -62,14 +58,10 @@ class TechnicianServiceController extends Controller
                 ];
             });
 
-
-        // Dropdown teknisi (hanya role=teknisi)
-        $technicians = User::query()
-            ->where('role', 'teknisi')
+        $technicians = User::where('role', 'teknisi')
             ->orderBy('name')
-            ->get(['id', 'name', 'email']);
+            ->get(['id', 'name', 'email', 'phone']);
 
-        // Dropdown kategori (dari tabel categories kalau ada; fallback ke defaults)
         $categories = $this->loadCategories();
 
         return Inertia::render('admin/technician-services/index', [
@@ -85,37 +77,29 @@ class TechnicianServiceController extends Controller
      */
     public function store(Request $request)
     {
-        $rules = [
-            'technician_id' => [
-                'required',
-                'integer',
-                Rule::exists('users', 'id')->where('role', 'teknisi'),
-            ],
-            'category' => $this->categoryRule(),
-            'active'   => ['nullable', 'boolean'],
-        ];
+        $validated = $request->validate([
+            'technician_id' => ['required', 'integer', Rule::exists('users', 'id')->where('role', 'teknisi')],
+            'category'      => $this->categoryRule(),
+            'active'        => ['nullable', 'boolean'],
+        ]);
 
-        $validated = $request->validate($rules);
-
-        // Pastikan unik (technician_id, category)
-        $exists = TechnicianService::query()
-            ->where('technician_id', $validated['technician_id'])
+        $exists = TechnicianService::where('technician_id', $validated['technician_id'])
             ->where('category', $validated['category'])
             ->exists();
 
         if ($exists) {
             return back()->withErrors([
-                'category' => 'Layanan untuk teknisi & kategori tersebut sudah ada.',
+                'category' => 'Layanan teknisi & kategori ini sudah ada.',
             ])->withInput();
         }
 
         TechnicianService::create([
             'technician_id' => $validated['technician_id'],
-            'category'      => $validated['category'],
-            'active'        => (bool) ($validated['active'] ?? true),
+            'category' => $validated['category'],
+            'active' => (bool) ($validated['active'] ?? true),
         ]);
 
-        return back()->with('success', 'Layanan teknisi berhasil ditambahkan.');
+        return back()->with('success', 'Layanan berhasil ditambahkan.');
     }
 
     /**
@@ -125,38 +109,26 @@ class TechnicianServiceController extends Controller
     {
         $service = TechnicianService::findOrFail($id);
 
-        $rules = [
-            'technician_id' => [
-                'required',
-                'integer',
-                Rule::exists('users', 'id')->where('role', 'teknisi'),
-            ],
-            'category' => $this->categoryRule(),
-            'active'   => ['required', 'boolean'],
-        ];
+        $validated = $request->validate([
+            'technician_id' => ['required', 'integer', Rule::exists('users', 'id')->where('role', 'teknisi')],
+            'category'      => $this->categoryRule(),
+            'active'        => ['required', 'boolean'],
+        ]);
 
-        $validated = $request->validate($rules);
-
-        // Cek duplikat kombinasi (technician_id, category) milik record lain
-        $duplicate = TechnicianService::query()
-            ->where('technician_id', $validated['technician_id'])
+        $duplicate = TechnicianService::where('technician_id', $validated['technician_id'])
             ->where('category', $validated['category'])
             ->where('id', '!=', $service->id)
             ->exists();
 
         if ($duplicate) {
             return back()->withErrors([
-                'category' => 'Kombinasi teknisi & kategori sudah digunakan di record lain.',
+                'category' => 'Layanan teknisi & kategori ini sudah digunakan sebelumnya.',
             ])->withInput();
         }
 
-        $service->update([
-            'technician_id' => $validated['technician_id'],
-            'category'      => $validated['category'],
-            'active'        => (bool) $validated['active'],
-        ]);
+        $service->update($validated);
 
-        return back()->with('success', 'Perubahan tersimpan.');
+        return back()->with('success', 'Perubahan disimpan.');
     }
 
     /**
@@ -164,49 +136,102 @@ class TechnicianServiceController extends Controller
      */
     public function destroy(int $id)
     {
-        $service = TechnicianService::findOrFail($id);
-        $service->delete();
-
-        return back()->with('success', 'Layanan teknisi dihapus.');
+        TechnicianService::findOrFail($id)->delete();
+        return back()->with('success', 'Layanan berhasil dihapus.');
     }
 
     /**
-     * Validasi kategori:
-     * - Jika tabel categories ada, pastikan slug ada.
-     * - Jika tidak ada, minimal string slug.
+     * GET /admin/technician-services/{technician_id}
      */
+    public function show(int $technician_id)
+    {
+        $owner = User::where('role', 'teknisi')->findOrFail($technician_id);
+
+        $services = TechnicianService::where('technician_id', $technician_id)
+            ->get(['id', 'technician_id', 'category', 'active']);
+
+        $categories = $this->loadCategories();
+
+        return Inertia::render('admin/technician-services/show', [
+            'owner' => [
+                'id' => $owner->id,
+                'name' => $owner->name,
+                'email' => $owner->email,
+                'phone' => $owner->phone,
+            ],
+            'services' => $services,
+            'categories' => $categories,
+        ]);
+    }
+
+    /**
+     * POST /admin/technician-services/{technician_id}/toggle
+     */
+    public function toggle(Request $request, int $technician_id)
+    {
+        $request->validate([
+            'category' => $this->categoryRule(),
+        ]);
+
+        $service = TechnicianService::firstOrCreate(
+            ['technician_id' => $technician_id, 'category' => $request->category],
+            ['active' => false]
+        );
+
+        $service->active = !$service->active;
+        $service->save();
+
+        return back()->with('success', 'Status layanan diperbarui.');
+    }
+
+    public function activateAll(int $technician_id)
+    {
+        $slugs = array_column($this->loadCategories(), 'slug');
+
+        foreach ($slugs as $slug) {
+            TechnicianService::updateOrCreate(
+                ['technician_id' => $technician_id, 'category' => $slug],
+                ['active' => true]
+            );
+        }
+
+        return back()->with('success', 'Semua layanan diaktifkan.');
+    }
+
+    public function deactivateAll(int $technician_id)
+    {
+        TechnicianService::where('technician_id', $technician_id)->update(['active' => false]);
+
+        return back()->with('success', 'Semua layanan dinonaktifkan.');
+    }
+
     private function categoryRule()
     {
         if (Schema::hasTable('categories')) {
-            return [
-                'required',
-                'string',
-                Rule::exists('categories', 'slug'),
-            ];
+            return ['required', 'string', Rule::exists('categories', 'slug')];
         }
-        return ['required', 'string', 'max:100']; // fallback sederhana
+        return ['required', 'string', 'max:100'];
     }
 
-    /**
-     * Ambil daftar kategori: slug & name.
-     * Fallback ke defaults jika tabel categories tidak tersedia.
-     */
     private function loadCategories(): array
     {
         if (Schema::hasTable('categories')) {
             return DB::table('categories')
                 ->orderBy('name')
-                ->get(['slug', 'name'])
-                ->map(fn($r) => ['slug' => $r->slug, 'name' => $r->name])
+                ->get(['slug', 'name', 'icon']) // ✅ ambil icon
+                ->map(fn($r) => [
+                    'slug' => $r->slug,
+                    'name' => $r->name,
+                    'icon' => $r->icon, // ✅ kirim ke FE
+                ])
                 ->toArray();
         }
 
-        // Fallback sesuai yang sudah dipakai di FE
         return [
-            ['slug' => 'ac',         'name' => 'AC'],
-            ['slug' => 'tv',         'name' => 'TV'],
-            ['slug' => 'kulkas',     'name' => 'Kulkas'],
-            ['slug' => 'mesin-cuci', 'name' => 'Mesin Cuci'],
+            ['slug' => 'ac', 'name' => 'AC', 'icon' => 'assets/categories/ac.png'],
+            ['slug' => 'tv', 'name' => 'TV', 'icon' => 'assets/categories/tv.png'],
+            ['slug' => 'kulkas', 'name' => 'Kulkas', 'icon' => 'assets/categories/kulkas.png'],
+            ['slug' => 'mesin-cuci', 'name' => 'Mesin Cuci', 'icon' => 'assets/categories/mesin-cuci.png'],
         ];
     }
 }

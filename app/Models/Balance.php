@@ -18,7 +18,7 @@ class Balance extends Model
 
     // Owner roles
     public const ROLE_USER       = 'user';
-    public const ROLE_TECHNICIAN = 'technician';
+    public const ROLE_TECHNICIAN = 'teknisi';
 
     // Types
     public const TYPE_HOLD            = 'hold';
@@ -49,7 +49,7 @@ class Balance extends Model
 
     public function owner(): BelongsTo
     {
-        // owner_role: 'user' | 'technician' → sama-sama ke users
+        // owner_role: 'user' | 'teknisi' → sama-sama ke users
         return $this->belongsTo(User::class, 'owner_id');
     }
 

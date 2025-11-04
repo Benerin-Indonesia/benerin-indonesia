@@ -58,8 +58,8 @@ function RoleBadge({ role }: { role: Role }) {
     role === "admin"
       ? "bg-gray-900 text-white"
       : role === "teknisi"
-        ? "bg-blue-50 text-blue-700"
-        : "bg-gray-100 text-gray-700";
+      ? "bg-blue-50 text-blue-700"
+      : "bg-gray-100 text-gray-700";
   return (
     <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${cls}`}>
       {ROLE_LABEL[role]}
@@ -112,6 +112,65 @@ function Modal({
         </div>
       </div>
     </div>
+  );
+}
+
+/* =========================================
+   Reusable Bank Fields
+========================================= */
+function BankFields<T extends { bank_name: string; account_name: string; account_number: string }>({
+  form,
+  legend,
+  disabled = false,
+}: {
+  form: { data: T; setData: <K extends keyof T>(key: K, value: T[K]) => void; errors?: Record<string, string | undefined> };
+  legend: string;
+  disabled?: boolean;
+}) {
+  const ro = (d: boolean) =>
+    `w-full rounded-xl border px-3 py-2 text-sm outline-none ${
+      d ? "bg-gray-50 border-gray-200 text-gray-700" : "bg-white border-gray-200 focus:ring-2 focus:ring-gray-900/20"
+    }`;
+
+  return (
+    <fieldset className="rounded-xl border border-gray-100 p-4">
+      <legend className="px-2 text-sm font-semibold text-gray-900">{legend}</legend>
+      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-800">Bank</label>
+          <input
+            type="text"
+            value={form.data.bank_name}
+            onChange={(e) => form.setData("bank_name", e.target.value as T[keyof T])}
+            disabled={disabled}
+            className={ro(disabled)}
+            placeholder="BCA/BNI/BRI/…"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-800">Nama Pemilik</label>
+          <input
+            type="text"
+            value={form.data.account_name}
+            onChange={(e) => form.setData("account_name", e.target.value as T[keyof T])}
+            disabled={disabled}
+            className={ro(disabled)}
+            placeholder="Nama di buku tabungan"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-800">No. Rekening</label>
+          <input
+            type="text"
+            value={form.data.account_number}
+            onChange={(e) => form.setData("account_number", e.target.value as T[keyof T])}
+            disabled={disabled}
+            className={ro(disabled)}
+            placeholder="1234567890"
+          />
+        </div>
+      </div>
+    </fieldset>
   );
 }
 
@@ -273,6 +332,16 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
     account_number: "",
   });
 
+  // Opsional: kosongkan rekening saat memilih admin
+  useEffect(() => {
+    if (form.data.role === "admin") {
+      form.setData("bank_name", "");
+      form.setData("account_name", "");
+      form.setData("account_number", "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.data.role]);
+
   const submit: React.FormEventHandler = (e) => {
     e.preventDefault();
     form.post("/admin/users", {
@@ -296,8 +365,9 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
             form.setData("name", e.target.value);
             if (form.errors.name) form.clearErrors("name");
           }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.name ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
+          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${
+            form.errors.name ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
+          }`}
           placeholder="Nama lengkap"
           required
         />
@@ -313,8 +383,9 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
             form.setData("email", e.target.value);
             if (form.errors.email) form.clearErrors("email");
           }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.email ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
+          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${
+            form.errors.email ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
+          }`}
           placeholder="user@example.com"
           required
         />
@@ -330,8 +401,9 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
             form.setData("password", e.target.value);
             if (form.errors.password) form.clearErrors("password");
           }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.password ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
+          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${
+            form.errors.password ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
+          }`}
           placeholder="••••••••"
           required
         />
@@ -363,42 +435,9 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
-      {form.data.role === "teknisi" && (
-        <fieldset className="rounded-xl border border-gray-100 p-4">
-          <legend className="px-2 text-sm font-semibold text-gray-900">Data Rekening (teknisi)</legend>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">Bank</label>
-              <input
-                type="text"
-                value={form.data.bank_name}
-                onChange={(e) => form.setData("bank_name", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="BCA/BNI/BRI/…"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">Nama Pemilik</label>
-              <input
-                type="text"
-                value={form.data.account_name}
-                onChange={(e) => form.setData("account_name", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="Nama di buku tabungan"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">No. Rekening</label>
-              <input
-                type="text"
-                value={form.data.account_number}
-                onChange={(e) => form.setData("account_number", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="1234567890"
-              />
-            </div>
-          </div>
-        </fieldset>
+      {/* Tampilkan rekening untuk user & teknisi (sembunyikan untuk admin) */}
+      {form.data.role !== "admin" && (
+        <BankFields form={form} legend={`Data Rekening (${ROLE_LABEL[form.data.role]})`} />
       )}
 
       <div className="pt-2">
@@ -450,6 +489,16 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
     account_number: user?.account_number ?? "",
   });
 
+  // Opsional: kosongkan rekening saat memilih admin
+  useEffect(() => {
+    if (form.data.role === "admin") {
+      form.setData("bank_name", "");
+      form.setData("account_name", "");
+      form.setData("account_number", "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.data.role]);
+
   const submit: React.FormEventHandler = (e) => {
     e.preventDefault();
     form.put(`/admin/users/${user.id}`, {
@@ -497,8 +546,9 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
             form.setData("name", e.target.value);
             if (form.errors.name) form.clearErrors("name");
           }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.name ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
+          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${
+            form.errors.name ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
+          }`}
           placeholder="Nama lengkap"
           required
         />
@@ -514,8 +564,9 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
             form.setData("email", e.target.value);
             if (form.errors.email) form.clearErrors("email");
           }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.email ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
+          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${
+            form.errors.email ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
+          }`}
           placeholder="user@example.com"
           required
         />
@@ -531,8 +582,9 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
             form.setData("password", e.target.value);
             if (form.errors.password) form.clearErrors("password");
           }}
-          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${form.errors.password ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
-            }`}
+          className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20 ${
+            form.errors.password ? "border-red-300 ring-2 ring-red-200" : "border-gray-200"
+          }`}
           placeholder="Biarkan kosong jika tidak diubah"
         />
         {form.errors.password && <p className="mt-1 text-xs text-red-600">{form.errors.password}</p>}
@@ -563,42 +615,9 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
         </div>
       </div>
 
-      {form.data.role === "teknisi" && (
-        <fieldset className="rounded-xl border border-gray-100 p-4">
-          <legend className="px-2 text-sm font-semibold text-gray-900">Data Rekening (teknisi)</legend>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">Bank</label>
-              <input
-                type="text"
-                value={form.data.bank_name}
-                onChange={(e) => form.setData("bank_name", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="BCA/BNI/BRI/…"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">Nama Pemilik</label>
-              <input
-                type="text"
-                value={form.data.account_name}
-                onChange={(e) => form.setData("account_name", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="Nama di buku tabungan"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-800">No. Rekening</label>
-              <input
-                type="text"
-                value={form.data.account_number}
-                onChange={(e) => form.setData("account_number", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-900/20"
-                placeholder="1234567890"
-              />
-            </div>
-          </div>
-        </fieldset>
+      {/* Tampilkan rekening untuk user & teknisi (sembunyikan untuk admin) */}
+      {form.data.role !== "admin" && (
+        <BankFields form={form} legend={`Data Rekening (${ROLE_LABEL[form.data.role]})`} />
       )}
 
       <div className="pt-2">
@@ -702,9 +721,20 @@ export default function AdminUsersIndex() {
   const sideWidth = sidebarCollapsed ? "md:w-20" : "md:w-72";
   const contentPadLeft = sidebarCollapsed ? "md:pl-20" : "md:pl-72";
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const doRefresh = () => {
+    setRefreshing(true);
+    router.reload({
+      only: ["users"],
+      onFinish: () => setRefreshing(false),
+      onError: () => setRefreshing(false),
+    });
+  };
+
   return (
     <>
-      <Head title="Users — Admin" />
+      <Head title="Users" />
       <div className="min-h-screen bg-gray-50">
         <div className="flex">
           {/* Overlay mobile */}
@@ -821,23 +851,24 @@ export default function AdminUsersIndex() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <div className="hidden sm:block">
-                    <div className="relative">
-                      <i className="fas fa-search pointer-events-none absolute left-3 top-2.5 text-sm text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Cari…"
-                        className="w-56 rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-gray-900/20"
-                        readOnly
-                      />
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={doRefresh}
+                      disabled={refreshing}
+                      aria-busy={refreshing}
+                      className={[
+                        "inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2",
+                        "text-sm font-semibold text-gray-700 hover:bg-gray-50",
+                        refreshing ? "opacity-60 cursor-not-allowed" : "",
+                      ].join(" ")}
+                      title="Muat ulang data user"
+                    >
+                      <i className={["fas", "fa-sync-alt", refreshing ? "animate-spin" : ""].join(" ")} />
+                      {refreshing ? "Menyegarkan…" : "Refresh"}
+                    </button>
                   </div>
-                  <Link
-                    href="/"
-                    className="hidden items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 sm:flex"
-                  >
-                    <i className="fas fa-globe-asia" /> Lihat Situs
-                  </Link>
+
                   <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-2.5 py-1.5">
                     <i className="fas fa-user-shield text-gray-500" />
                     <span className="text-sm text-gray-800">{auth?.user?.name ?? "Admin"}</span>

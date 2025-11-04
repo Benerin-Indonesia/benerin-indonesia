@@ -113,7 +113,7 @@ const NAV = [
 export default function AdminPayoutsIndex() {
   const page = usePage<PageProps>();
   const currentUrl = page.url;
-  const { payouts, technicians, filters } = page.props;
+  const { auth, payouts, technicians, filters } = page.props;
 
   // Sidebar & local states
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -186,9 +186,20 @@ export default function AdminPayoutsIndex() {
   const sideWidth = sidebarCollapsed ? "md:w-20" : "md:w-72";
   const contentPadLeft = sidebarCollapsed ? "md:pl-20" : "md:pl-72";
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const doRefresh = () => {
+    setRefreshing(true);
+    router.reload({
+      only: ["payouts"],
+      onFinish: () => setRefreshing(false),
+      onError: () => setRefreshing(false),
+    });
+  };
+
   return (
     <>
-      <Head title="Payouts — Admin" />
+      <Head title="Pencairan" />
       <div className="min-h-screen bg-gray-50">
         <div className="flex">
           {/* Overlay mobile */}
@@ -248,7 +259,7 @@ export default function AdminPayoutsIndex() {
             <div className="mt-auto">
               {/* Tombol Logout (POST Inertia) */}
               <Link
-                href="/admin/logout"       // ganti ke "/logout" jika pakai route default Laravel
+                href="/admin/logout"
                 method="post"
                 as="button"
                 className={[
@@ -292,25 +303,26 @@ export default function AdminPayoutsIndex() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <div className="hidden sm:block">
-                    <div className="relative">
-                      <i className="fas fa-search pointer-events-none absolute left-3 top-2.5 text-sm text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Cari…"
-                        className="w-56 rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-gray-900/20"
-                        readOnly
-                      />
-                    </div>
-                  </div>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => router.reload({ only: ["payouts"] })}
-                      className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                      onClick={doRefresh}
+                      disabled={refreshing}
+                      aria-busy={refreshing}
+                      className={[
+                        "inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2",
+                        "text-sm font-semibold text-gray-700 hover:bg-gray-50",
+                        refreshing ? "opacity-60 cursor-not-allowed" : ""
+                      ].join(" ")}
+                      title="Muat ulang data pencairan dana"
                     >
-                      <i className="fas fa-sync-alt" /> Refresh
+                      <i className={["fas", "fa-sync-alt", refreshing ? "animate-spin" : ""].join(" ")} />
+                      {refreshing ? "Menyegarkan…" : "Refresh"}
                     </button>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-2.5 py-1.5">
+                    <i className="fas fa-user-shield text-gray-500" />
+                    <span className="text-sm text-gray-800">{auth?.user?.name ?? "Admin"}</span>
                   </div>
                 </div>
               </div>
@@ -320,8 +332,10 @@ export default function AdminPayoutsIndex() {
             <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
               {/* Filter */}
               <form onSubmit={submitFilter} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-6">
-                  <div className="lg:col-span-2">
+                {/* BARIS 1 */}
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+                  {/* Cari */}
+                  <div className="lg:col-span-6">
                     <label className="mb-1 block text-xs font-medium text-gray-600">Cari</label>
                     <div className="relative">
                       <i className="fas fa-search pointer-events-none absolute left-3 top-2.5 text-gray-400" />
@@ -335,7 +349,8 @@ export default function AdminPayoutsIndex() {
                     </div>
                   </div>
 
-                  <div>
+                  {/* Status */}
+                  <div className="lg:col-span-3">
                     <label className="mb-1 block text-xs font-medium text-gray-600">Status</label>
                     <select
                       value={filterForm.data.status}
@@ -349,27 +364,8 @@ export default function AdminPayoutsIndex() {
                     </select>
                   </div>
 
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Dari Tanggal</label>
-                    <input
-                      type="date"
-                      value={filterForm.data.date_from}
-                      onChange={(e) => filterForm.setData("date_from", e.target.value)}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Sampai</label>
-                    <input
-                      type="date"
-                      value={filterForm.data.date_to}
-                      onChange={(e) => filterForm.setData("date_to", e.target.value)}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
-                    />
-                  </div>
-
-                  <div>
+                  {/* Teknisi */}
+                  <div className="lg:col-span-3">
                     <label className="mb-1 block text-xs font-medium text-gray-600">Teknisi</label>
                     <select
                       value={filterForm.data.technician_id}
@@ -378,16 +374,42 @@ export default function AdminPayoutsIndex() {
                     >
                       <option value="">Semua</option>
                       {(technicians ?? []).map((t) => (
-                        <option key={t.id} value={String(t.id)}>
-                          {t.name} — {t.email}
-                        </option>
+                        <option key={t.id} value={String(t.id)}>{t.name} — {t.email}</option>
                       ))}
                     </select>
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-6">
-                  <div>
+                {/* BARIS 2 */}
+                <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12">
+                  {/* Rentang Tanggal */}
+                  <div className="lg:col-span-6">
+                    <label className="mb-1 block text-xs font-medium text-gray-600">Rentang Tanggal</label>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+                      <div className="sm:col-span-2">
+                        <input
+                          type="date"
+                          value={filterForm.data.date_from}
+                          onChange={(e) => filterForm.setData("date_from", e.target.value)}
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
+                          placeholder="Dari"
+                        />
+                      </div>
+                      <div className="hidden items-center justify-center text-xs text-gray-400 sm:flex">s/d</div>
+                      <div className="sm:col-span-2">
+                        <input
+                          type="date"
+                          value={filterForm.data.date_to}
+                          onChange={(e) => filterForm.setData("date_to", e.target.value)}
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
+                          placeholder="Sampai"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Min Amount */}
+                  <div className="lg:col-span-3">
                     <label className="mb-1 block text-xs font-medium text-gray-600">Min Amount</label>
                     <input
                       type="number"
@@ -399,7 +421,8 @@ export default function AdminPayoutsIndex() {
                     />
                   </div>
 
-                  <div>
+                  {/* Max Amount */}
+                  <div className="lg:col-span-3">
                     <label className="mb-1 block text-xs font-medium text-gray-600">Max Amount</label>
                     <input
                       type="number"
@@ -412,16 +435,17 @@ export default function AdminPayoutsIndex() {
                   </div>
                 </div>
 
-                <div className="mt-3 flex gap-2">
+                {/* Aksi */}
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition-transform hover:bg-gray-50 hover:scale-[1.02] active:scale-95"
                   >
                     <i className="fas fa-filter" /> Terapkan
                   </button>
                   <Link
                     href="/admin/payouts"
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition-transform hover:bg-gray-50 hover:scale-[1.02] active:scale-95"
                     preserveState
                     replace
                   >
@@ -429,6 +453,7 @@ export default function AdminPayoutsIndex() {
                   </Link>
                 </div>
               </form>
+
 
               {/* Table */}
               <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">

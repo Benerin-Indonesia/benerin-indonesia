@@ -4,25 +4,19 @@ import { Head, Link, router, useForm, usePage } from "@inertiajs/react";
 /* =========================================
    Types
 ========================================= */
-// type Role = "user" | "teknisi" | "admin";
-
 type UserLite = {
   id: number;
   name: string;
   email: string;
+  phone?: string | null;
+  // backend bisa menambahkan role jika perlu; di UI ini kita asumsi daftar yang diterima adalah teknisi
 };
 
 type TechnicianService = {
   id: number;
   technician_id: number;
-  category: string;
+  category: string; // slug category
   active: boolean;
-  technician?: {
-    id: number;
-    name: string;
-    email: string;
-    phone?: string | null;
-  };
 };
 
 type Category = {
@@ -43,500 +37,23 @@ type Paginated<T> = {
 
 type PageProps = {
   auth?: { user?: { name?: string } };
-  services?: Paginated<TechnicianService> | TechnicianService[];
-  technicians?: UserLite[];
+  // opsional: services dipakai untuk menghitung jumlah layanan aktif per teknisi
+  services?: TechnicianService[] | Paginated<TechnicianService>;
+  // WAJIB: semua teknisi (idealnya role=teknisi) dari tabel users
+  technicians?: UserLite[] | Paginated<UserLite>;
   categories?: Category[];
-  filters?: { q?: string; category?: string; active?: string; perPage?: number };
 };
 
 /* =========================================
    Helpers
 ========================================= */
-function isPaginatedServices(
-  s: PageProps["services"]
-): s is Paginated<TechnicianService> {
-  return (
-    typeof s === "object" &&
-    s !== null &&
-    !Array.isArray(s) &&
-    Array.isArray((s as Paginated<TechnicianService>).data) &&
-    typeof (s as Paginated<TechnicianService>).current_page === "number"
-  );
+function isPaginatedServices(s: PageProps["services"]): s is Paginated<TechnicianService> {
+  return typeof s === "object" && s !== null && !Array.isArray(s) && Array.isArray((s as Paginated<TechnicianService>).data);
+}
+function isPaginatedTechnicians(t: PageProps["technicians"]): t is Paginated<UserLite> {
+  return typeof t === "object" && t !== null && !Array.isArray(t) && Array.isArray((t as Paginated<UserLite>).data);
 }
 
-const DEFAULT_CATEGORIES: Category[] = [
-  { slug: "ac", name: "AC" },
-  { slug: "tv", name: "TV" },
-  { slug: "kulkas", name: "Kulkas" },
-  { slug: "mesin-cuci", name: "Mesin Cuci" },
-];
-
-/* =========================================
-   Small UI
-========================================= */
-function StatusBadge({ active }: { active: boolean }) {
-  const cls = active
-    ? "bg-green-50 text-green-700 border-green-100"
-    : "bg-gray-100 text-gray-700 border-gray-200";
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-xs font-medium ${cls}`}>
-      <i className={`fas ${active ? "fa-check-circle" : "fa-minus-circle"}`} />
-      {active ? "Aktif" : "Nonaktif"}
-    </span>
-  );
-}
-
-function Modal({
-  open,
-  onClose,
-  title,
-  children,
-  wide = false,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  children: React.ReactNode;
-  wide?: boolean;
-}) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[60]">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={onClose} />
-      <div className="absolute inset-0 grid place-items-center px-4">
-        <div
-          className={`w-full ${wide ? "max-w-3xl" : "max-w-lg"} rounded-2xl border border-gray-100 bg-white shadow-xl`}
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
-            <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-            <button
-              onClick={onClose}
-              className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
-              aria-label="Tutup"
-            >
-              <i className="fas fa-times" />
-            </button>
-          </div>
-          <div className="p-5">{children}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* =========================================
-   Pagination (di BAWAH tabel, gaya Filament)
-========================================= */
-function Pagination({
-  meta,
-  filters,
-}: {
-  meta: Pick<Paginated<TechnicianService>, "current_page" | "last_page" | "per_page" | "total">;
-  filters?: { q?: string; category?: string; active?: string; perPage?: number };
-}) {
-  if (!meta || meta.last_page <= 1) return null;
-
-  const goTo = (page: number, perPage = meta.per_page) => {
-    const params: Record<string, string | number> = {
-      page,
-      perPage,
-    };
-    if (filters?.q) params.q = filters.q!;
-    if (filters?.category) params.category = filters.category!;
-    if (typeof filters?.active !== "undefined" && filters?.active !== "")
-      params.active = filters.active!;
-    router.get("/admin/technician-services", params, {
-      preserveScroll: true,
-      preserveState: true,
-    });
-  };
-
-  const changePerPage = (pp: number) => {
-    const params: Record<string, string | number> = { page: 1, perPage: pp };
-    if (filters?.q) params.q = filters.q!;
-    if (filters?.category) params.category = filters.category!;
-    if (typeof filters?.active !== "undefined" && filters?.active !== "")
-      params.active = filters.active!;
-    router.get("/admin/technician-services", params, {
-      preserveScroll: true,
-      preserveState: true,
-    });
-  };
-
-  // daftar halaman: 1 … (current±2) … last
-  const pages: Array<number | string> = (() => {
-    const total = meta.last_page;
-    const cur = meta.current_page;
-    const delta = 2;
-    const arr: number[] = [1];
-    for (let i = cur - delta; i <= cur + delta; i++) {
-      if (i > 1 && i < total) arr.push(i);
-    }
-    if (total > 1) arr.push(total);
-    const out: Array<number | string> = [];
-    let prev: number | null = null;
-    for (const n of [...new Set(arr)].sort((a, b) => a - b)) {
-      if (prev !== null) {
-        if (n - prev === 2) out.push(prev + 1);
-        else if (n - prev > 2) out.push("…");
-      }
-      out.push(n);
-      prev = n;
-    }
-    return out;
-  })();
-
-  const from = meta.total === 0 ? 0 : (meta.current_page - 1) * meta.per_page + 1;
-  const to = Math.min(meta.current_page * meta.per_page, meta.total);
-
-  return (
-    <nav className="mt-4 flex flex-col items-stretch gap-3 rounded-xl border border-gray-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="text-xs text-gray-500">
-        Menampilkan <span className="font-medium text-gray-700">{from}</span> –{" "}
-        <span className="font-medium text-gray-700">{to}</span> dari{" "}
-        <span className="font-medium text-gray-700">{meta.total}</span> data
-      </div>
-
-      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-        <div className="inline-flex items-center gap-2">
-          <select
-            value={meta.per_page}
-            onChange={(e) => changePerPage(Number(e.target.value))}
-            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-800"
-            aria-label="Jumlah data per halaman"
-          >
-            {[10, 20, 50, 100].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-          <span className="text-xs text-gray-500">per page</span>
-        </div>
-
-        <ul className="inline-flex select-none items-center gap-1">
-          <li>
-            <button
-              type="button"
-              disabled={meta.current_page <= 1}
-              onClick={() => goTo(meta.current_page - 1)}
-              className="min-w-[2.25rem] rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-300"
-              aria-label="Sebelumnya"
-            >
-              ‹
-            </button>
-          </li>
-
-          {pages.map((p, i) =>
-            p === "…" ? (
-              <li key={`dots-${i}`} className="px-2 text-sm text-gray-400">
-                …
-              </li>
-            ) : (
-              <li key={`p-${p}`}>
-                <button
-                  type="button"
-                  aria-current={p === meta.current_page ? "page" : undefined}
-                  onClick={() => goTo(p as number)}
-                  className={[
-                    "min-w-[2.25rem] rounded-lg border px-3 py-1.5 text-sm",
-                    p === meta.current_page
-                      ? "border-gray-900 bg-gray-900 text-white"
-                      : "border-gray-200 text-gray-700 hover:bg-gray-50",
-                  ].join(" ")}
-                >
-                  {p}
-                </button>
-              </li>
-            )
-          )}
-
-          <li>
-            <button
-              type="button"
-              disabled={meta.current_page >= meta.last_page}
-              onClick={() => goTo(meta.current_page + 1)}
-              className="min-w-[2.25rem] rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-300"
-              aria-label="Berikutnya"
-            >
-              ›
-            </button>
-          </li>
-        </ul>
-      </div>
-    </nav>
-  );
-}
-
-/* =========================================
-   Forms
-========================================= */
-function CreateServiceForm({
-  onDone,
-  categories,
-  technicians,
-}: {
-  onDone: () => void;
-  categories: Category[];
-  technicians: UserLite[];
-}) {
-  type CreateForm = {
-    technician_id: number | "";
-    category: string;
-    active: boolean;
-  };
-  const form = useForm<CreateForm>({
-    technician_id: "",
-    category: categories[0]?.slug ?? "",
-    active: true,
-  });
-
-  const submit: React.FormEventHandler = (e) => {
-    e.preventDefault();
-    form.post("/admin/technician-services", {
-      preserveScroll: true,
-      onSuccess: () => {
-        form.reset();
-        onDone();
-        router.reload({ only: ["services"] });
-      },
-    });
-  };
-
-  return (
-    <form onSubmit={submit} className="space-y-4" noValidate>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-800">Teknisi</label>
-          <select
-            value={form.data.technician_id}
-            onChange={(e) => form.setData("technician_id", e.target.value ? Number(e.target.value) : "")}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
-            required
-          >
-            <option value="">Pilih teknisi…</option>
-            {technicians.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} — {t.email}
-              </option>
-            ))}
-          </select>
-          {form.errors.technician_id && (
-            <p className="mt-1 text-xs text-red-600">{form.errors.technician_id}</p>
-          )}
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-800">Kategori</label>
-          <select
-            value={form.data.category}
-            onChange={(e) => form.setData("category", e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
-            required
-          >
-            {categories.map((c) => (
-              <option key={c.slug} value={c.slug}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          {form.errors.category && (
-            <p className="mt-1 text-xs text-red-600">{form.errors.category}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <input
-          id="create-active"
-          type="checkbox"
-          checked={form.data.active}
-          onChange={(e) => form.setData("active", e.target.checked)}
-          className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900/30"
-        />
-        <label htmlFor="create-active" className="text-sm text-gray-800">
-          Aktif
-        </label>
-      </div>
-
-      <div className="pt-2">
-        <button
-          type="submit"
-          disabled={form.processing}
-          className={[
-            "inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5",
-            "text-sm font-semibold text-white shadow-sm",
-            "transition-transform duration-150 ease-out",
-            "hover:scale-[1.02] active:scale-95 hover:brightness-110",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
-          ].join(" ")}
-        >
-          {form.processing ? (
-            <>
-              <i className="fas fa-spinner fa-spin" /> Menyimpan…
-            </>
-          ) : (
-            <>
-              <i className="fas fa-save" /> Simpan
-            </>
-          )}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function EditServiceForm({
-  service,
-  onDone,
-  categories,
-  technicians,
-}: {
-  service: TechnicianService;
-  onDone: () => void;
-  categories: Category[];
-  technicians: UserLite[];
-}) {
-  type EditForm = {
-    technician_id: number | "";
-    category: string;
-    active: boolean;
-  };
-  const form = useForm<EditForm>({
-    technician_id: service.technician_id ?? "",
-    category: service.category,
-    active: service.active,
-  });
-
-  const submit: React.FormEventHandler = (e) => {
-    e.preventDefault();
-    form.put(`/admin/technician-services/${service.id}`, {
-      preserveScroll: true,
-      onSuccess: () => {
-        onDone();
-        router.reload({ only: ["services"] });
-      },
-    });
-  };
-
-  const onDelete = () => {
-    if (!confirm(`Hapus layanan teknisi untuk kategori "${service.category}"?`)) return;
-    form.delete(`/admin/technician-services/${service.id}`, {
-      onSuccess: () => {
-        onDone();
-        router.reload({ only: ["services"] });
-      },
-    });
-  };
-
-  return (
-    <form onSubmit={submit} className="space-y-4" noValidate>
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-500">ID: #{service.id}</span>
-        <button
-          type="button"
-          onClick={onDelete}
-          className={[
-            "inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700",
-            "transition-transform duration-150 ease-out hover:scale-[1.02] active:scale-95 hover:bg-red-50",
-          ].join(" ")}
-        >
-          <i className="fas fa-trash" /> Hapus
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-800">Teknisi</label>
-          <select
-            value={form.data.technician_id}
-            onChange={(e) => form.setData("technician_id", e.target.value ? Number(e.target.value) : "")}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
-            required
-          >
-            <option value="">Pilih teknisi…</option>
-            {technicians.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} — {t.email}
-              </option>
-            ))}
-          </select>
-          {form.errors.technician_id && (
-            <p className="mt-1 text-xs text-red-600">{form.errors.technician_id}</p>
-          )}
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-800">Kategori</label>
-          <select
-            value={form.data.category}
-            onChange={(e) => form.setData("category", e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
-            required
-          >
-            {categories.map((c) => (
-              <option key={c.slug} value={c.slug}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          {form.errors.category && (
-            <p className="mt-1 text-xs text-red-600">{form.errors.category}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <input
-          id="edit-active"
-          type="checkbox"
-          checked={form.data.active}
-          onChange={(e) => form.setData("active", e.target.checked)}
-          className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900/30"
-        />
-        <label htmlFor="edit-active" className="text-sm text-gray-800">
-          Aktif
-        </label>
-      </div>
-
-      <div className="pt-2">
-        <button
-          type="submit"
-          disabled={form.processing}
-          className={[
-            "inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5",
-            "text-sm font-semibold text-white shadow-sm",
-            "transition-transform duration-150 ease-out",
-            "hover:scale-[1.02] active:scale-95 hover:brightness-110",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
-          ].join(" ")}
-        >
-          {form.processing ? (
-            <>
-              <i className="fas fa-spinner fa-spin" /> Menyimpan…
-            </>
-          ) : (
-            <>
-              <i className="fas fa-save" /> Simpan Perubahan
-            </>
-          )}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-/* =========================================
-   Page
-========================================= */
 const NAV = [
   { href: "/admin/dashboard", icon: "fa-tachometer-alt", label: "Dashboard" },
   { href: "/admin/requests", icon: "fa-clipboard-list", label: "Permintaan Servis" },
@@ -548,73 +65,79 @@ const NAV = [
   { href: "/admin/categories", icon: "fa-tags", label: "Kategori" },
 ];
 
+/* =========================================
+   Small UI
+========================================= */
+function RoleBadgeTech() {
+  return <span className="rounded-lg bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">Teknisi</span>;
+}
+
+/* =========================================
+   PAGE: Layanan Service (Index teknisi)
+========================================= */
 export default function AdminTechnicianServicesIndex() {
   const page = usePage<PageProps>();
   const currentUrl = page.url;
-  const { auth, services, filters } = page.props;
+  const { auth } = page.props;
 
-  const categories = useMemo<Category[]>(
-    () => (page.props.categories && page.props.categories.length > 0 ? page.props.categories : DEFAULT_CATEGORIES),
-    [page.props.categories]
-  );
-  const technicians = useMemo<UserLite[]>(
-    () =>
-      page.props.technicians && page.props.technicians.length > 0
-        ? page.props.technicians
-        : [
-            { id: 2, name: "Nina Rahma", email: "nina@example.com" },
-            { id: 5, name: "Budi Santoso", email: "budi@example.com" },
-          ],
-    [page.props.technicians]
-  );
-
-  // Sidebar & modals
+  // Sidebar states
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  const [openCreate, setOpenCreate] = useState(false);
-  const [editItem, setEditItem] = useState<TechnicianService | null>(null);
-
-  // Keyboard ESC to close sidebar
+  // ESC close sidebar
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSidebarOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Data list
-  const items: TechnicianService[] = useMemo(() => {
-    if (Array.isArray(services)) return services;
-    if (isPaginatedServices(services)) return services.data;
+  // Ambil technicians
+  const allTechnicians: UserLite[] = useMemo(() => {
+    if (Array.isArray(page.props.technicians)) return page.props.technicians;
+    if (isPaginatedTechnicians(page.props.technicians)) return page.props.technicians.data;
+    // fallback sample jika props kosong
+    return [
+      { id: 2, name: "Nina Rahma", email: "nina@example.com", phone: "0812-3456-7890" },
+      { id: 5, name: "Budi Santoso", email: "budi@example.com", phone: "0813-9876-5432" },
+    ];
+  }, [page.props.technicians]);
+
+  // Ambil services (untuk hitung jumlah layanan aktif per teknisi)
+  const allServices: TechnicianService[] = useMemo(() => {
+    if (Array.isArray(page.props.services)) return page.props.services;
+    if (isPaginatedServices(page.props.services)) return page.props.services.data;
     // fallback sample
     return [
-      { id: 1, technician_id: 2, category: "ac", active: true, technician: { id: 2, name: "Nina Rahma", email: "nina@example.com" } },
-      { id: 2, technician_id: 5, category: "tv", active: false, technician: { id: 5, name: "Budi Santoso", email: "budi@example.com" } },
+      { id: 1, technician_id: 2, category: "ac", active: true },
+      { id: 2, technician_id: 2, category: "tv", active: false },
+      { id: 3, technician_id: 5, category: "kulkas", active: true },
+      { id: 4, technician_id: 5, category: "mesin-cuci", active: true },
     ];
-  }, [services]);
+  }, [page.props.services]);
 
-  // Meta pagination (jika ada)
-  const meta = useMemo(() => {
-    if (!isPaginatedServices(services)) return null;
-    const { current_page, last_page, per_page, total } = services;
-    return { current_page, last_page, per_page, total };
-  }, [services]);
+  // Mapping: technicianId -> jumlah layanan aktif
+  const activeCountByTech = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const s of allServices) {
+      if (s.active) map.set(s.technician_id, (map.get(s.technician_id) ?? 0) + 1);
+    }
+    return map;
+  }, [allServices]);
 
-  // Filter form
-  const filterForm = useForm({
-    q: filters?.q ?? "",
-    category: filters?.category ?? "",
-    active: filters?.active ?? "",
-  });
+  const filterForm = useForm({ q: "" });
 
   const submitFilter: React.FormEventHandler = (e) => {
     e.preventDefault();
-    router.get(
-      "/admin/technician-services",
-      { ...filterForm.data, perPage: filters?.perPage ?? meta?.per_page ?? 10 },
-      { preserveState: true, replace: true }
-    );
   };
+
+  const filteredTechnicians = useMemo(() => {
+    const q = (filterForm.data.q ?? "").toLowerCase().trim();
+    if (!q) return allTechnicians;
+    return allTechnicians.filter((t) => {
+      const hay = `${t.name ?? ""} ${t.email ?? ""} ${t.phone ?? ""}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [allTechnicians, filterForm.data.q]);
 
   // Helpers
   const isActive = (href: string) => currentUrl.startsWith(href);
@@ -627,13 +150,19 @@ export default function AdminTechnicianServicesIndex() {
   const sideWidth = sidebarCollapsed ? "md:w-20" : "md:w-72";
   const contentPadLeft = sidebarCollapsed ? "md:pl-20" : "md:pl-72";
 
-  // Category name helper
-  const categoryName = (slug: string) =>
-    categories.find((c) => c.slug === slug)?.name ?? slug;
+  const [refreshing, setRefreshing] = useState(false);
+  const doRefresh = () => {
+    setRefreshing(true);
+    router.reload({
+      only: ["technicians", "services"],
+      onFinish: () => setRefreshing(false),
+      onError: () => setRefreshing(false),
+    });
+  };
 
   return (
     <>
-      <Head title="Layanan Teknisi — Admin" />
+      <Head title="Layanan Service" />
       <div className="min-h-screen bg-gray-50">
         <div className="flex">
           {/* Overlay mobile */}
@@ -641,7 +170,7 @@ export default function AdminTechnicianServicesIndex() {
             <div
               className="fixed inset-0 z-30 bg-black/30 backdrop-blur-[1px] md:hidden"
               onClick={() => setSidebarOpen(false)}
-              aria-hidden
+              aria-hidden="true"
             />
           )}
 
@@ -695,9 +224,9 @@ export default function AdminTechnicianServicesIndex() {
             </nav>
 
             <div className="mt-auto">
-              {/* Tombol Logout (POST Inertia) */}
+              {/* Logout (POST) */}
               <Link
-                href="/admin/logout"       // ganti ke "/logout" jika pakai route default Laravel
+                href="/admin/logout"
                 method="post"
                 as="button"
                 className={[
@@ -713,7 +242,6 @@ export default function AdminTechnicianServicesIndex() {
                 {!sidebarCollapsed && <span>Logout</span>}
               </Link>
 
-              {/* Footer kecil di sidebar */}
               <div className="mt-4 border-t border-gray-100 pt-4 text-center text-xs text-gray-500">
                 {!sidebarCollapsed && <>© {new Date().getFullYear()} Benerin Indonesia</>}
                 {sidebarCollapsed && <span className="block text-[10px]">© {new Date().getFullYear()}</span>}
@@ -723,7 +251,7 @@ export default function AdminTechnicianServicesIndex() {
 
           {/* Content */}
           <div className={`flex min-h-screen w-full flex-col ${contentPadLeft}`}>
-            {/* Header (selaras dashboard) */}
+            {/* Header */}
             <header className="sticky top-0 z-20 border-b border-gray-100 bg-white/70 backdrop-blur">
               <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
                 <div className="flex items-center gap-2">
@@ -736,29 +264,28 @@ export default function AdminTechnicianServicesIndex() {
                   </button>
                   <div>
                     <div className="text-xs uppercase tracking-wider text-gray-500">Admin</div>
-                    <h1 className="text-lg font-semibold text-gray-900">Layanan Teknisi</h1>
+                    <h1 className="text-lg font-semibold text-gray-900">Layanan Service</h1>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <div className="hidden sm:block">
-                    <div className="relative">
-                      <i className="fas fa-search pointer-events-none absolute left-3 top-2.5 text-sm text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Cari…"
-                        className="w-56 rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-gray-900/20"
-                        readOnly
-                      />
-                    </div>
-                  </div>
-                  <Link
-                    href="/"
-                    className="hidden items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 sm:flex"
+                  <button
+                    type="button"
+                    onClick={doRefresh}
+                    disabled={refreshing}
+                    aria-busy={refreshing}
+                    className={[
+                      "inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2",
+                      "text-sm font-semibold text-gray-700 hover:bg-gray-50",
+                      refreshing ? "opacity-60 cursor-not-allowed" : "",
+                    ].join(" ")}
+                    title="Muat ulang data"
                   >
-                    <i className="fas fa-globe-asia" /> Lihat Situs
-                  </Link>
-                  <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-2.5 py-1.5">
+                    <i className={["fas", "fa-sync-alt", refreshing ? "animate-spin" : ""].join(" ")} />
+                    {refreshing ? "Menyegarkan…" : "Refresh"}
+                  </button>
+
+                  <div className="hidden items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-2.5 py-1.5 sm:flex">
                     <i className="fas fa-user-shield text-gray-500" />
                     <span className="text-sm text-gray-800">{auth?.user?.name ?? "Admin"}</span>
                   </div>
@@ -768,78 +295,34 @@ export default function AdminTechnicianServicesIndex() {
 
             {/* Main */}
             <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-              {/* Actions */}
-              <div className="mb-3 flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  <span className="hidden sm:inline">Kelola kategori layanan yang diambil oleh teknisi.</span>
-                </div>
-                <button
-                  onClick={() => setOpenCreate(true)}
-                  className={[
-                    "inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm",
-                    "transition-transform duration-150 ease-out hover:scale-[1.02] active:scale-95 hover:brightness-110",
-                  ].join(" ")}
-                >
-                  <i className="fas fa-plus" />
-                  Tambah Layanan
-                </button>
-              </div>
-
-              {/* Filter */}
-              <form onSubmit={submitFilter} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+              {/* FILTER */}
+              <form onSubmit={submitFilter} className="mb-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <div className="sm:col-span-1">
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Cari (nama/email teknisi)</label>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-xs font-medium text-gray-600">Cari teknisi</label>
                     <div className="relative">
                       <i className="fas fa-search pointer-events-none absolute left-3 top-2.5 text-gray-400" />
                       <input
                         type="text"
                         value={filterForm.data.q}
                         onChange={(e) => filterForm.setData("q", e.target.value)}
-                        placeholder="Misal: Nina…"
+                        placeholder="Nama / email / no HP…"
                         className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
                       />
                     </div>
-                  </div>
-                  <div className="sm:col-span-1">
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Kategori</label>
-                    <select
-                      value={filterForm.data.category}
-                      onChange={(e) => filterForm.setData("category", e.target.value)}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
-                    >
-                      <option value="">Semua</option>
-                      {categories.map((c) => (
-                        <option key={c.slug} value={c.slug}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="sm:col-span-1">
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Status</label>
-                    <select
-                      value={filterForm.data.active}
-                      onChange={(e) => filterForm.setData("active", e.target.value)}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900/20"
-                    >
-                      <option value="">Semua</option>
-                      <option value="1">Aktif</option>
-                      <option value="0">Nonaktif</option>
-                    </select>
                   </div>
                 </div>
 
                 <div className="mt-3 flex gap-2">
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition-transform duration-150 hover:scale-[1.02] active:scale-95 hover:bg-gray-50"
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition hover:bg-gray-50"
                   >
                     <i className="fas fa-filter" /> Terapkan
                   </button>
                   <Link
-                    href="/admin/technician-services"
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition-transform duration-150 hover:scale-[1.02] active:scale-95 hover:bg-gray-50"
+                    href="/admin/users"
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition hover:bg-gray-50"
                     preserveState
                     replace
                   >
@@ -848,60 +331,49 @@ export default function AdminTechnicianServicesIndex() {
                 </div>
               </form>
 
-              {/* Table */}
-              <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+              {/* TABLE */}
+              <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="text-left text-gray-500">
-                        <th className="py-2 pr-3">Teknisi</th>
+                        <th className="py-2 pr-3 w-16">No</th>
+                        <th className="py-2 pr-3">Nama Teknisi</th>
                         <th className="py-2 pr-3">Email</th>
-                        <th className="py-2 pr-3">Kategori</th>
-                        <th className="py-2 pr-3">Status</th>
+                        <th className="py-2 pr-3">No HP</th>
+                        <th className="py-2 pr-3">Jumlah Layanan Dibuka</th>
                         <th className="py-2 text-right">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {items.map((s) => (
-                        <tr key={s.id} className="text-gray-800">
+                      {filteredTechnicians.map((t, idx) => (
+                        <tr key={t.id} className="text-gray-800">
+                          <td className="py-2 pr-3">{idx + 1}</td>
                           <td className="py-2 pr-3 font-medium">
-                            {s.technician?.name ?? technicians.find((t) => t.id === s.technician_id)?.name ?? `#${s.technician_id}`}
-                          </td>
-                          <td className="py-2 pr-3">
-                            {s.technician?.email ?? technicians.find((t) => t.id === s.technician_id)?.email ?? "-"}
-                          </td>
-                          <td className="py-2 pr-3">{categoryName(s.category)}</td>
-                          <td className="py-2 pr-3">
-                            <StatusBadge active={s.active} />
-                          </td>
-                          <td className="py-2">
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setEditItem(s)}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition-transform duration-150 hover:scale-[1.02] active:scale-95 hover:bg-gray-50"
-                              >
-                                <i className="fas fa-edit" /> Edit
-                              </button>
+                            <div className="flex items-center gap-2">
+                              <span>{t.name}</span>
+                              <RoleBadgeTech />
                             </div>
+                          </td>
+                          <td className="py-2 pr-3">{t.email}</td>
+                          <td className="py-2 pr-3">{t.phone ?? "-"}</td>
+                          <td className="py-2 pr-3 text-emerald-700 font-medium">
+                            {activeCountByTech.get(t.id) ?? 0}
+                          </td>
+                          <td className="py-2 text-right">
+                            <Link
+                              href={`/admin/technician-services/${t.id}`}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                              <i className="fas fa-eye" /> Lihat
+                            </Link>
                           </td>
                         </tr>
                       ))}
-
-                      {items.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="py-8 text-center text-sm text-gray-500">
-                            Tidak ada data.
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
-
-                {/* Pagination di bawah tabel */}
-                {meta && <Pagination meta={meta} filters={filters} />}
-              </div>
+              </section>
             </main>
 
             {/* Footer */}
@@ -913,31 +385,6 @@ export default function AdminTechnicianServicesIndex() {
           </div>
         </div>
       </div>
-
-      {/* Modals */}
-      <Modal open={openCreate} onClose={() => setOpenCreate(false)} title="Tambah Layanan Teknisi" wide>
-        <CreateServiceForm
-          onDone={() => setOpenCreate(false)}
-          categories={categories}
-          technicians={technicians}
-        />
-      </Modal>
-
-      <Modal
-        open={!!editItem}
-        onClose={() => setEditItem(null)}
-        title={`Edit Layanan${editItem ? ` — #${editItem.id}` : ""}`}
-        wide
-      >
-        {editItem && (
-          <EditServiceForm
-            service={editItem}
-            onDone={() => setEditItem(null)}
-            categories={categories}
-            technicians={technicians}
-          />
-        )}
-      </Modal>
     </>
   );
 }

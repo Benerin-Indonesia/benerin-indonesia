@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Head, Link, usePage } from "@inertiajs/react";
+import { Head, Link, useForm, usePage } from "@inertiajs/react";
 
 /* =========================================
    Types
@@ -47,6 +47,7 @@ type Payout = {
   created_at?: string | null;
   updated_at?: string | null;
 
+  transfer_receipt_path?: string | null;
   technician?: MiniUser | null;
 };
 
@@ -83,6 +84,7 @@ function fmtDateTime(iso?: string | null): string {
     minute: "2-digit",
   });
 }
+const isImageUrl = (u: string) => /\.(png|jpe?g|webp|gif)$/i.test(u);
 
 /* =========================================
    UI bits
@@ -112,9 +114,16 @@ const NAV = [
 ];
 
 /* =========================================
-   Timeline sederhana
+   TIMELINE (VERTICAL) — match “show request”
 ========================================= */
-function Timeline({
+const PAYOUT_FLOW: Array<"created" | "pending" | "paid" | "rejected"> = [
+  "created",
+  "pending",
+  "paid",
+  "rejected",
+];
+
+function StatusTimeline({
   status,
   createdAt,
   paidAt,
@@ -123,41 +132,89 @@ function Timeline({
   createdAt?: string | null;
   paidAt?: string | null;
 }) {
-  const steps: Array<{
-    key: PayoutStatus | "created";
-    label: string;
-    when?: string | null;
-    active: boolean;
-    icon: string;
-  }> = [
-      { key: "created", label: "Dibuat", when: createdAt ?? null, active: true, icon: "fa-circle" },
-      {
-        key: "pending",
-        label: "Pending",
-        when: createdAt ?? null,
-        active: status === "pending" || status === "paid" || status === "rejected",
-        icon: "fa-hourglass-half",
-      },
-      { key: "paid", label: "Paid", when: paidAt ?? null, active: status === "paid", icon: "fa-check" },
-      { key: "rejected", label: "Rejected", when: null, active: status === "rejected", icon: "fa-times" },
-    ];
+  // mapping current ke index seperti di halaman request
+  const currentKey: "created" | "pending" | "paid" | "rejected" =
+    status === "paid" ? "paid" : status === "rejected" ? "rejected" : "pending";
+
+  const curIdx = PAYOUT_FLOW.indexOf(currentKey);
+
+  const whenText = (k: (typeof PAYOUT_FLOW)[number]) => {
+    switch (k) {
+      case "created":
+        return fmtDateTime(createdAt);
+      case "pending":
+        return fmtDateTime(createdAt);
+      case "paid":
+        return fmtDateTime(paidAt);
+      case "rejected":
+        return "-";
+    }
+  };
+
+  const iconOf = (k: (typeof PAYOUT_FLOW)[number]) =>
+    k === "created"
+      ? "fa-circle"
+      : k === "pending"
+      ? "fa-hourglass-half"
+      : k === "paid"
+      ? "fa-check"
+      : "fa-times";
 
   return (
-    <ol className="space-y-3">
-      {steps.map((s) => (
-        <li key={s.key} className="flex items-start gap-3">
-          <span
-            className={`grid h-6 w-6 place-items-center rounded-full ${s.active ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500"
-              }`}
-          >
-            <i className={`fas ${s.icon}`} />
-          </span>
-          <div>
-            <div className={`text-sm font-semibold ${s.active ? "text-gray-900" : "text-gray-500"}`}>{s.label}</div>
-            <div className="text-xs text-gray-500">{s.when ? fmtDateTime(s.when) : "-"}</div>
-          </div>
-        </li>
-      ))}
+    <ol className="relative ml-3">
+      {PAYOUT_FLOW.map((k, i) => {
+        // state langkah (meniru logika request)
+        let state: "done" | "current" | "upcoming" | "cancelled" =
+          i < curIdx ? "done" : i === curIdx ? "current" : "upcoming";
+        if (currentKey === "rejected") {
+          state = k === "rejected" ? "cancelled" : "upcoming";
+        }
+
+        const circleCls =
+          state === "done"
+            ? "bg-emerald-600 text-white"
+            : state === "current"
+            ? "bg-indigo-600 text-white"
+            : state === "cancelled"
+            ? "bg-rose-600 text-white"
+            : "bg-gray-200 text-gray-500";
+
+        // konektor seperti request: posisinya stabil di tengah dot
+        const lineCls =
+          i < PAYOUT_FLOW.length - 1
+            ? state === "done"
+              ? "bg-emerald-200"
+              : state === "cancelled"
+              ? "bg-rose-200"
+              : "bg-gray-200"
+            : "";
+
+        return (
+          <li key={k} className="relative pb-5 pl-9">
+            {/* DOT: ukuran & ikon konsisten */}
+            <span className={`absolute left-0 top-0 grid h-7 w-7 place-items-center rounded-full ${circleCls}`}>
+              <i className={`fas ${iconOf(k)} text-[12px] leading-none`} />
+            </span>
+
+            {/* CONNECTOR: center di dot (left-[13px], top-7) */}
+            {i < PAYOUT_FLOW.length - 1 && (
+              <span className={`absolute left-[13px] top-7 bottom-0 w-0.5 ${lineCls}`} aria-hidden />
+            )}
+
+            {/* LABEL */}
+            <div className="text-sm font-semibold">
+              {k === "created"
+                ? "Dibuat"
+                : k === "pending"
+                ? "Menunggu Proses"
+                : k === "paid"
+                ? "Dibayar"
+                : "Ditolak"}
+            </div>
+            <div className="text-xs text-gray-500">{whenText(k)}</div>
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -182,19 +239,20 @@ export default function AdminPayoutShow() {
   // Data
   const payout: Payout = useMemo<Payout>(() => {
     if (page.props.payout) return page.props.payout;
-    // fallback demo supaya layout tetap render
+    // fallback demo
     return {
       id: 5001,
       technician_id: 2,
       amount: 350000,
-      status: "paid",
+      status: "pending",
       bank_name: "BCA",
       account_name: "Nina Rahma",
       account_number: "1234567890",
-      paid_at: new Date().toISOString(),
+      paid_at: null,
       note: "Pencairan periode Agustus",
       created_at: new Date().toISOString(),
       technician: { id: 2, name: "Nina Rahma", email: "nina@example.com", phone: "0812-0000-0000" },
+      transfer_receipt_path: null,
     };
   }, [page.props.payout]);
 
@@ -214,9 +272,42 @@ export default function AdminPayoutShow() {
   const sideWidth = sidebarCollapsed ? "md:w-20" : "md:w-72";
   const contentPadLeft = sidebarCollapsed ? "md:pl-20" : "md:pl-72";
 
+  // Forms
+  const approveForm = useForm<{ receipt: File | null; note: string }>({
+    receipt: null,
+    note: "",
+  });
+  const rejectForm = useForm<{ note: string }>({
+    note: "",
+  });
+
+  const approving = approveForm.processing;
+  const rejecting = rejectForm.processing;
+
+  const canApprove = payout.status === "pending";
+  const canReject = payout.status === "pending";
+
+  // Bukti transfer URL publik
+  const receiptPublicUrl = payout.transfer_receipt_path ? `/storage/${payout.transfer_receipt_path}` : null;
+
+  // Preview lokal
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const [localMime, setLocalMime] = useState<string | null>(null);
+  useEffect(() => {
+    const f = approveForm.data.receipt;
+    if (f) {
+      const url = URL.createObjectURL(f);
+      setLocalPreview(url);
+      setLocalMime(f.type || null);
+      return () => URL.revokeObjectURL(url);
+    }
+    setLocalPreview(null);
+    setLocalMime(null);
+  }, [approveForm.data.receipt]);
+
   return (
     <>
-      <Head title={`Payout #${payout.id} — Admin`} />
+      <Head title={`Pencairan #${payout.id}`} />
       <div className="min-h-screen bg-gray-50">
         <div className="flex">
           {/* Overlay mobile */}
@@ -278,9 +369,8 @@ export default function AdminPayoutShow() {
             </nav>
 
             <div className="mt-auto">
-              {/* Tombol Logout (POST Inertia) */}
               <Link
-                href="/admin/logout"       // ganti ke "/logout" jika pakai route default Laravel
+                href="/admin/logout"
                 method="post"
                 as="button"
                 className={[
@@ -296,7 +386,6 @@ export default function AdminPayoutShow() {
                 {!sidebarCollapsed && <span>Logout</span>}
               </Link>
 
-              {/* Footer kecil di sidebar */}
               <div className="mt-4 border-t border-gray-100 pt-4 text-center text-xs text-gray-500">
                 {!sidebarCollapsed && <>© {new Date().getFullYear()} Benerin Indonesia</>}
                 {sidebarCollapsed && <span className="block text-[10px]">© {new Date().getFullYear()}</span>}
@@ -330,18 +419,6 @@ export default function AdminPayoutShow() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <PayoutBadge status={payout.status} />
-                  <div className="hidden sm:block">
-                    <div className="relative">
-                      <i className="fas fa-search pointer-events-none absolute left-3 top-2.5 text-sm text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Cari…"
-                        className="w-56 rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-gray-900/20"
-                        readOnly
-                      />
-                    </div>
-                  </div>
                   <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-2.5 py-1.5">
                     <i className="fas fa-user-shield text-gray-500" />
                     <span className="text-sm text-gray-800">{auth?.user?.name ?? "Admin"}</span>
@@ -383,6 +460,45 @@ export default function AdminPayoutShow() {
                       <div className="text-xs text-gray-500">Catatan</div>
                       <div className="whitespace-pre-wrap text-gray-800">{payout.note ?? "-"}</div>
                     </div>
+
+                    {/* Bukti Transfer */}
+                    {receiptPublicUrl && (
+                      <div className="mt-3">
+                        <div className="text-xs text-gray-500">Bukti Transfer</div>
+                        <a
+                          href={receiptPublicUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium text-blue-600 underline-offset-2 hover:underline"
+                        >
+                          Lihat bukti
+                        </a>
+
+                        <div className="mt-2 overflow-hidden rounded-xl border bg-white">
+                          {isImageUrl(receiptPublicUrl) ? (
+                            <img
+                              src={receiptPublicUrl}
+                              alt="Bukti transfer"
+                              className="max-h-80 w-full object-contain"
+                            />
+                          ) : /\.pdf$/i.test(receiptPublicUrl) ? (
+                            <object data={receiptPublicUrl} type="application/pdf" className="h-96 w-full">
+                              <div className="p-4 text-sm">
+                                Pratinjau PDF tidak tersedia.{" "}
+                                <a
+                                  href={receiptPublicUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 underline"
+                                >
+                                  Buka PDF
+                                </a>
+                              </div>
+                            </object>
+                          ) : null}
+                        </div>
+                      </div>
+                    )}
                   </section>
 
                   {/* Technician */}
@@ -428,15 +544,15 @@ export default function AdminPayoutShow() {
                   </section>
                 </div>
 
-                {/* RIGHT: Timeline & Ledger */}
+                {/* RIGHT: Timeline, Ledger, Aksi Admin */}
                 <div className="space-y-4">
                   {/* Timeline */}
                   <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                     <h2 className="mb-3 text-base font-semibold text-gray-900">Timeline Status</h2>
-                    <Timeline status={payout.status} createdAt={payout.created_at} paidAt={payout.paid_at} />
+                    <StatusTimeline status={payout.status} createdAt={payout.created_at} paidAt={payout.paid_at} />
                   </section>
 
-                  {/* Ledger (opsional) */}
+                  {/* Ledger */}
                   <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-center justify-between">
                       <h2 className="text-base font-semibold text-gray-900">Ledger Terkait</h2>
@@ -477,6 +593,137 @@ export default function AdminPayoutShow() {
                         </table>
                       </div>
                     )}
+                  </section>
+
+                  {/* Aksi Admin */}
+                  <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <h2 className="mb-3 text-base font-semibold text-gray-900">Aksi Admin</h2>
+
+                    {/* APPROVE */}
+                    <fieldset disabled={!canApprove} className={!canApprove ? "opacity-60 pointer-events-none" : ""}>
+                      <div className="mb-2 text-sm font-medium text-gray-800">
+                        Setujui & Unggah Bukti Transfer (Screenshot/PDF)
+                      </div>
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          approveForm.post(`/admin/payouts/${payout.id}/approve`, {
+                            forceFormData: true,
+                            onSuccess: () => approveForm.reset(),
+                          });
+                        }}
+                        encType="multipart/form-data"
+                        className="space-y-2"
+                      >
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          onChange={(e) => approveForm.setData("receipt", e.target.files?.[0] ?? null)}
+                          className="
+                            block w-full rounded-xl border border-gray-200 bg-white text-sm
+                            file:mr-3 file:rounded-lg file:border-0
+                            file:bg-gray-300 file:text-gray-800 file:px-3 file:py-2
+                            hover:file:bg-gray-400
+                            focus:outline-none focus:ring-2 focus:ring-gray-300
+                          "
+                          required
+                        />
+
+                        {/* Preview */}
+                        {localPreview && (
+                          <div className="overflow-hidden rounded-xl border bg-white">
+                            {localMime?.startsWith("image/") ? (
+                              <img
+                                src={localPreview}
+                                alt="Preview bukti"
+                                className="max-h-80 w-full object-contain"
+                              />
+                            ) : localMime === "application/pdf" ? (
+                              <object data={localPreview} type="application/pdf" className="h-96 w-full">
+                                <div className="p-4 text-sm">
+                                  Pratinjau PDF tidak tersedia di browser ini.
+                                  <a
+                                    href={localPreview}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="ml-2 text-blue-600 underline"
+                                  >
+                                    Buka PDF
+                                  </a>
+                                </div>
+                              </object>
+                            ) : (
+                              <div className="p-4 text-sm text-gray-600">
+                                Tipe file tidak didukung untuk pratinjau.
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <textarea
+                          value={approveForm.data.note}
+                          onChange={(e) => approveForm.setData("note", e.target.value)}
+                          className="block w-full rounded-xl border border-gray-200 bg-white p-3 text-sm"
+                          placeholder="Catatan (opsional)"
+                          rows={3}
+                        />
+                        <button
+                          type="submit"
+                          className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                          disabled={approving || !approveForm.data.receipt}
+                        >
+                          {approving ? (
+                            <>
+                              <i className="fas fa-spinner fa-spin" /> Memproses…
+                            </>
+                          ) : (
+                            <>
+                              <i className="fas fa-check" /> Approve & Upload
+                            </>
+                          )}
+                        </button>
+                      </form>
+                    </fieldset>
+
+                    <div className="my-4 border-t border-gray-100" />
+
+                    {/* REJECT */}
+                    <fieldset disabled={!canReject} className={!canReject ? "opacity-60 pointer-events-none" : ""}>
+                      <div className="mb-2 text-sm font-medium text-gray-800">Tolak Payout</div>
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          rejectForm.post(`/admin/payouts/${payout.id}/reject`, {
+                            onSuccess: () => rejectForm.reset(),
+                          });
+                        }}
+                        className="space-y-2"
+                      >
+                        <textarea
+                          value={rejectForm.data.note}
+                          onChange={(e) => rejectForm.setData("note", e.target.value)}
+                          className="block w-full rounded-xl border border-gray-200 bg-white p-3 text-sm"
+                          placeholder="Alasan penolakan (wajib, min 5 karakter)"
+                          rows={3}
+                          required
+                        />
+                        <button
+                          type="submit"
+                          className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+                          disabled={rejecting || !rejectForm.data.note || rejectForm.data.note.trim().length < 5}
+                        >
+                          {rejecting ? (
+                            <>
+                              <i className="fas fa-spinner fa-spin" /> Memproses…
+                            </>
+                          ) : (
+                            <>
+                              <i className="fas fa-times" /> Reject
+                            </>
+                          )}
+                        </button>
+                      </form>
+                    </fieldset>
                   </section>
                 </div>
               </div>

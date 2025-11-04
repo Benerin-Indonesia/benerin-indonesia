@@ -231,6 +231,18 @@ Route::prefix('admin')
             ->only(['index', 'store', 'update', 'destroy'])
             ->parameters(['technician-services' => 'id']);
 
+        Route::get('/technician-services/{technician_id}', [AdminTechnicianServiceController::class, 'show'])
+            ->name('technician-services.show');
+
+        Route::post('/technician-services/{technician_id}/toggle', [AdminTechnicianServiceController::class, 'toggle'])
+            ->name('technician-services.toggle');
+
+        Route::post('/technician-services/{technician_id}/activate-all', [AdminTechnicianServiceController::class, 'activateAll'])
+            ->name('technician-services.activate-all');
+
+        Route::post('/technician-services/{technician_id}/deactivate-all', [AdminTechnicianServiceController::class, 'deactivateAll'])
+            ->name('technician-services.deactivate-all');
+
         Route::resource('categories', AdminCategoryController::class)
             ->only(['index', 'store', 'update', 'destroy'])
             ->parameters(['categories' => 'id']);
@@ -247,9 +259,19 @@ Route::prefix('admin')
             ->only(['index', 'show'])
             ->parameters(['payouts' => 'id']);
 
+        Route::post('/payouts/{id}/approve', [AdminPayoutController::class, 'approve'])
+            ->name('payouts.approve');
+
+        Route::post('/payouts/{id}/reject', [AdminPayoutController::class, 'reject'])
+            ->name('payouts.reject');
+
         Route::resource('balances', AdminBalanceController::class)
             ->only(['index'])
             ->parameters(['balances' => 'id']);
+
+        Route::get('/balances/{role}/{id}', [AdminBalanceController::class, 'show'])
+            ->where(['role' => 'user|teknisi', 'id' => '[0-9]+'])
+            ->name('admin.balances.show');
     });
 
 

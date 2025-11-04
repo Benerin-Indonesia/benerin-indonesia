@@ -1,5 +1,20 @@
 import React, { type FC, type PropsWithChildren, useEffect, useRef, useState } from "react";
-import { Head, Link } from "@inertiajs/react";
+import { Head, Link, usePage } from "@inertiajs/react";
+
+// ====== Tambahan tipe agar usePage punya bentuk props yang benar ======
+type User = {
+  id: number | string;
+  name?: string;
+  email?: string;
+  role?: string;
+};
+
+// ⛳ Perbaikan: tambahkan index signature agar memenuhi constraint PageProps
+interface SharedProps extends Record<string, unknown> {
+  auth?: {
+    user?: User | null;
+  };
+}
 
 // Palet warna
 const PRIMARY = "#206BB0";
@@ -87,7 +102,7 @@ function useReveal<T extends HTMLElement>(opts?: IntersectionObserverInit) {
   return ref;
 }
 
-// Komponen pembungkus untuk animasi reveal (tanpa `any`, tanpa `JSX` namespace)
+// Komponen pembungkus untuk animasi reveal
 const Reveal: FC<PropsWithChildren<{ className?: string; delay?: number }>> = ({
   children,
   className = "",
@@ -110,6 +125,14 @@ export default function Landing() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // ✅ Ambil shared props dari Inertia, sudah diketik
+  const { props } = usePage<SharedProps>();
+  const user = props.auth?.user ?? null;
+
+  // Helper target URL
+  const buatPermintaanHref = user ? "/user/dashboard" : "/user/login";
+  const daftarTeknisiHref = user ? "/teknisi/home" : "/teknisi/register";
 
   return (
     <>
@@ -229,7 +252,7 @@ export default function Landing() {
                 <Reveal delay={140}>
                   <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                     <Link
-                      href="/user/permintaan/buat"
+                      href={buatPermintaanHref}
                       className="inline-flex items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-sm
                                  transition hover:shadow-md hover:brightness-105 active:scale-[.98] sm:text-base"
                       style={{ backgroundColor: PRIMARY }}
@@ -237,7 +260,7 @@ export default function Landing() {
                       Buat Permintaan
                     </Link>
                     <Link
-                      href="/register?role=technician"
+                      href={daftarTeknisiHref}
                       className="inline-flex items-center justify-center rounded-xl border px-5 py-3 text-sm font-semibold text-gray-900
                                  transition hover:bg-gray-50 active:scale-[.98] sm:text-base"
                       style={{ borderColor: PRIMARY }}
@@ -397,7 +420,8 @@ export default function Landing() {
                 <h2 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Kategori Populer</h2>
                 <p className="mt-2 text-gray-600">Langsung pilih kebutuhan Anda.</p>
               </div>
-              <Link href="/user/permintaan/buat" className="text-sm font-semibold hover:underline" style={{ color: PRIMARY }}>
+              {/* Link teks “Buat Permintaan →” mengikuti logika sama */}
+              <Link href={buatPermintaanHref} className="text-sm font-semibold hover:underline" style={{ color: PRIMARY }}>
                 Buat Permintaan →
               </Link>
             </Reveal>
@@ -410,6 +434,7 @@ export default function Landing() {
                   className="group rounded-2xl border border-gray-200 bg-white p-5 text-center shadow-sm transition
                              hover:-translate-y-1 hover:shadow-md hover:scale-[1.02] active:scale-[.99]"
                 >
+                  {/* Untuk kartu kategori, biarkan ke halaman form dengan query category */}
                   <Link href={`/user/permintaan/buat?category=${c.slug}`} className="block">
                     <div className="mx-auto aspect-square w-20 sm:w-24 rounded-xl bg-gray-50 border flex items-center justify-center overflow-hidden">
                       <img src={c.img} alt={c.name} className="h-16 w-16 object-contain sm:h-20 sm:w-20 transition duration-300 group-hover:scale-105" />
@@ -487,10 +512,10 @@ export default function Landing() {
                 <p className="mt-1 text-sm text-white/90">Buat permintaan sekarang, teknisi siap membantu.</p>
               </div>
               <div className="flex gap-3">
-                <Link href="/user/permintaan/buat" className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition hover:bg-white/90 active:scale-[.98]">
+                <Link href={buatPermintaanHref} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition hover:bg-white/90 active:scale-[.98]">
                   Buat Permintaan
                 </Link>
-                <Link href="/register?role=technician" className="rounded-xl border px-4 py-2 text-sm font-semibold transition hover:bg-white/10 active:scale-[.98]" style={{ borderColor: SECONDARY, color: SECONDARY }}>
+                <Link href={daftarTeknisiHref} className="rounded-xl border px-4 py-2 text-sm font-semibold transition hover:bg-white/10 active:scale-[.98]" style={{ borderColor: SECONDARY, color: SECONDARY }}>
                   Daftar Teknisi
                 </Link>
               </div>

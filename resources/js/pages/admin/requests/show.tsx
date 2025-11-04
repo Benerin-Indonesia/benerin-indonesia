@@ -347,7 +347,7 @@ export default function AdminRequestShow() {
 
   return (
     <>
-      <Head title={`Request #${req.id} — Admin`} />
+      <Head title={`Permintaan #${req.id}`} />
       <div className="min-h-screen bg-gray-50">
         <div className="flex">
           {/* Overlay mobile */}
@@ -462,17 +462,6 @@ export default function AdminRequestShow() {
 
                 <div className="flex items-center gap-2">
                   <StatusBadge status={req.status} />
-                  <div className="hidden sm:block">
-                    <div className="relative">
-                      <i className="fas fa-search pointer-events-none absolute left-3 top-2.5 text-sm text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Cari…"
-                        className="w-56 rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-gray-900/20"
-                        readOnly
-                      />
-                    </div>
-                  </div>
                   <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-2.5 py-1.5">
                     <i className="fas fa-user-shield text-gray-500" />
                     <span className="text-sm text-gray-800">{auth?.user?.name ?? "Admin"}</span>

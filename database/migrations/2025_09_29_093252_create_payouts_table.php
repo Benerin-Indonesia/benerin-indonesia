@@ -34,6 +34,7 @@ return new class extends Migration
             $table->timestamp('paid_at')->nullable();
 
             $table->string('note', 255)->nullable();
+            $table->string('transfer_receipt_path', 255)->nullable();
 
             $table->timestamps();
 
