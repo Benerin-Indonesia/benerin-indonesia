@@ -73,7 +73,7 @@ Route::prefix('user')->name('user.')->group(function () {
 
         // Request Form
         Route::get('/permintaan/buat', [UserServiceRequestController::class, 'buatPermintaan'])
-            ->name('permintaan.create')->middleware('throttle:permintaan-limit');
+            ->name('permintaan.create');
         Route::post('/permintaan/simpan', [UserServiceRequestController::class, 'store'])
             ->name('permintaan.store')->middleware('throttle:permintaan-limit');
 

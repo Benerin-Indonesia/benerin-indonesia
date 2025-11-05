@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use App\Models\Balance;
+use App\Models\User;
 
 class TechnicianController extends Controller
 {
@@ -86,8 +87,7 @@ class TechnicianController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user || !$user->isTeknisi()) {
-            // Gunakan abort untuk konsistensi
+        if (!$user) {
             abort(403, 'Akses ditolak.');
         }
 

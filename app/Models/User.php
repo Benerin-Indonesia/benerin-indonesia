@@ -23,7 +23,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role',          // 'user' | 'teknisi' | 'admin'
+        'role',
         'phone',
         'photo',
         'bank_name',

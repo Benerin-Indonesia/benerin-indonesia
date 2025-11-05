@@ -37,7 +37,7 @@ class ServiceRequestController extends Controller
 
         $query = ServiceRequest::query()
             ->with('user:id,name')
-            ->where('user_id', auth()->id())
+            ->where('user_id', Auth::id())
             ->latest('id');
 
         // Terapkan filter pencarian
