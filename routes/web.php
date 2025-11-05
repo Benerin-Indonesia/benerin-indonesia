@@ -31,6 +31,8 @@ use App\Http\Controllers\Teknisi\PayoutController as TechnicianpayoutController;
 use App\Http\Controllers\Teknisi\ProfileController as TeknisiProfileController;
 use App\Http\Controllers\ServiceRequest\Teknisi\ServiceRequestController as TechnicianServiceRequestController;
 use App\Http\Controllers\ServiceRequest\User\ServiceRequestController as UserServiceRequestController;
+use App\Http\Controllers\Auth\UserPasswordResetLinkController;
+use App\Http\Controllers\Auth\TeknisiPasswordResetLinkController;
 
 /* -------------------- Public / Landing -------------------- */
 
@@ -57,6 +59,18 @@ Route::prefix('user')->name('user.')->group(function () {
         return redirect()->route('login.choice');
     })->name('logout');
 
+    Route::get('/forgot-password', [UserPasswordResetLinkController::class, 'create'])
+        ->name('password.request');
+
+    Route::post('/forgot-password', [UserPasswordResetLinkController::class, 'store'])
+        ->name('password.email');
+
+    Route::get('/reset-password/{token}', [UserPasswordResetLinkController::class, 'createReset'])
+        ->name('password.reset');
+    
+    Route::post('/reset-password', [UserPasswordResetLinkController::class, 'updatePassword'])
+        ->name('password.update');
+
     // ==== Middleware Hanya untuk user role ====
     Route::middleware(['auth', 'role:user'])->group(function () {
         // Home user
@@ -76,9 +90,6 @@ Route::prefix('user')->name('user.')->group(function () {
             ->name('permintaan.create');
         Route::post('/permintaan/simpan', [UserServiceRequestController::class, 'store'])
             ->name('permintaan.store')->middleware('throttle:permintaan-limit');
-
-        //Wallet
-        // Route::get('/wallet', [WalletController::class, 'indexUser'])->name('wallet');
 
         //Refund
         Route::get('/refund', [UserController::class, 'refundIndex'])->name('refund.index');
@@ -126,6 +137,12 @@ Route::prefix('teknisi')->name('teknisi.')->group(function () {
 
         Route::get('/register', [TechnicianAuthController::class, 'showRegisterForm'])->name('register.show');
         Route::post('/register', [TechnicianAuthController::class, 'register'])->name('register');
+
+        Route::get('/forgot-password',   [TeknisiPasswordResetLinkController::class, 'create'])->name('password.request');
+        Route::post('/forgot-password',  [TeknisiPasswordResetLinkController::class, 'store'])->name('password.email');
+
+        Route::get('/reset-password/{token}', [TeknisiPasswordResetLinkController::class, 'createReset'])->name('password.reset');
+        Route::post('/reset-password',        [TeknisiPasswordResetLinkController::class, 'updatePassword'])->name('password.update');
     });
 
     Route::post('/logout', function (Request $request) {
@@ -198,13 +215,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::post('/login', [AdminAuthController::class, 'login'])->name('login');
 
     // Admin Forgot/Reset Password (khusus admin)
-    Route::get('forgot-password', fn() => Inertia::render('admin/forgot-password'))
-        ->name('password.request');
+    Route::get('/forgot-password', [AdminPasswordResetLinkController::class, 'create'])
+            ->name('password.request');
+
     Route::post('forgot-password', [AdminPasswordResetLinkController::class, 'store'])
         ->name('password.email');
 
     Route::get('reset-password/{token}', [AdminNewPasswordController::class, 'create'])
         ->name('password.reset');
+
     Route::post('reset-password', [AdminNewPasswordController::class, 'store'])
         ->name('password.update');
 });
@@ -271,7 +290,7 @@ Route::prefix('admin')
 
         Route::get('/balances/{role}/{id}', [AdminBalanceController::class, 'show'])
             ->where(['role' => 'user|teknisi', 'id' => '[0-9]+'])
-            ->name('admin.balances.show');
+            ->name('balances.show');
     });
 
 
@@ -288,3 +307,12 @@ Route::get('/dashboard', function () {
         default   => redirect()->route('user.dashboard'),
     };
 })->middleware('auth')->name('dashboard');
+
+Route::get('/test-401', fn() => abort(401));
+Route::get('/test-402', fn() => abort(402));
+Route::get('/test-403', fn() => abort(403));
+Route::get('/test-404', fn() => abort(404));
+Route::get('/test-419', fn() => abort(419));
+Route::get('/test-429', fn() => abort(429));
+Route::get('/test-500', fn() => abort(500));
+Route::get('/test-503', fn() => abort(503));

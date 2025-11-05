@@ -84,10 +84,6 @@ export default function AdminForgotPassword() {
               </div>
             </div>
           </div>
-
-          <p className="mx-auto mt-4 max-w-md text-center text-xs text-gray-500">
-            Endpoint yang dipakai: <code className="rounded bg-gray-50 px-1.5 py-0.5">POST /admin/forgot-password</code>.
-          </p>
         </div>
       </div>
     </>

@@ -16,7 +16,7 @@ export default function AdminResetPassword({ token, email }: Props) {
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    post("/reset-password");
+    post("/admin/reset-password");
   }
 
   return (
